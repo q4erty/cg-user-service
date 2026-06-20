@@ -1,9 +1,12 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
 plugins {
     kotlin("jvm") version "2.3.21"
     kotlin("plugin.spring") version "2.3.21"
     id("org.springframework.boot") version "4.1.0"
     id("io.spring.dependency-management") version "1.1.7"
     kotlin("plugin.jpa") version "2.3.21"
+    id("org.jetbrains.kotlinx.kover") version "0.9.1"
 }
 
 group = "com.cloudgaming"
@@ -20,32 +23,73 @@ repositories {
     mavenCentral()
 }
 
+extra["springCloudVersion"] = "2025.1.2"
+extra["testcontainersVersion"] = "1.20.4"
+extra["redissonVersion"] = "3.27.2"
+extra["resilience4jVersion"] = "2.2.0"
+extra["springdocVersion"] = "2.3.0"
+
 dependencies {
-    implementation("org.springframework.boot:spring-boot-starter-actuator")
+    implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
-    implementation("org.springframework.boot:spring-boot-starter-flyway")
     implementation("org.springframework.boot:spring-boot-starter-security")
-    implementation("org.springframework.boot:spring-boot-starter-security-oauth2-resource-server")
+    implementation("org.springframework.boot:spring-boot-starter-oauth2-resource-server")
     implementation("org.springframework.boot:spring-boot-starter-validation")
-    implementation("org.springframework.boot:spring-boot-starter-webmvc")
-    implementation("org.flywaydb:flyway-database-postgresql")
+    implementation("org.springframework.boot:spring-boot-starter-actuator")
+    implementation("org.springframework.boot:spring-boot-starter-data-redis")
+    implementation("org.springframework:spring-aop:7.0.8")
+    implementation("org.springframework.boot:spring-boot-starter-cache")
+
+    implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
     implementation("org.jetbrains.kotlin:kotlin-reflect")
-    implementation("tools.jackson.module:jackson-module-kotlin")
+
     runtimeOnly("org.postgresql:postgresql")
-    testImplementation("org.springframework.boot:spring-boot-starter-actuator-test")
-    testImplementation("org.springframework.boot:spring-boot-starter-data-jpa-test")
-    testImplementation("org.springframework.boot:spring-boot-starter-flyway-test")
-    testImplementation("org.springframework.boot:spring-boot-starter-security-oauth2-resource-server-test")
-    testImplementation("org.springframework.boot:spring-boot-starter-security-test")
-    testImplementation("org.springframework.boot:spring-boot-starter-validation-test")
-    testImplementation("org.springframework.boot:spring-boot-starter-webmvc-test")
-    testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    implementation("org.flywaydb:flyway-core")
+    implementation("org.flywaydb:flyway-database-postgresql")
+
+    implementation("org.springframework.kafka:spring-kafka")
+
+    implementation("org.redisson:redisson-spring-boot-starter:${property("redissonVersion")}")
+    implementation("com.github.ben-manes.caffeine:caffeine:3.1.8")
+
+    implementation("io.github.resilience4j:resilience4j-spring-boot3:${property("resilience4jVersion")}")
+    implementation("io.github.resilience4j:resilience4j-reactor:${property("resilience4jVersion")}")
+
+    implementation("org.keycloak:keycloak-admin-client:24.0.4")
+
+    implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:${property("springdocVersion")}")
+
+    implementation("net.logstash.logback:logstash-logback-encoder:7.4")
+
+    testImplementation("org.springframework.boot:spring-boot-starter-test")
+    testImplementation("org.springframework.security:spring-security-test")
+    testImplementation("org.springframework.kafka:spring-kafka-test")
+
+    testImplementation(enforcedPlatform("org.testcontainers:testcontainers-bom:${property("testcontainersVersion")}"))
+    testImplementation("org.testcontainers:junit-jupiter")
+    testImplementation("org.testcontainers:postgresql")
+    testImplementation("org.testcontainers:testcontainers")
+    testImplementation("com.redis:testcontainers-redis:2.2.2")
+    testImplementation("com.github.dasniko:testcontainers-keycloak:3.3.0")
 }
 
 kotlin {
     compilerOptions {
-        freeCompilerArgs.addAll("-Xjsr305=strict", "-Xannotation-default-target=param-property")
+        freeCompilerArgs.addAll(
+            "-Xjsr305=strict",
+            "-Xannotation-default-target=param-property"
+        )
+        jvmTarget.set(JvmTarget.JVM_25)
+    }
+}
+
+kover {
+    reports {
+        verify {
+            rule {
+                minBound(0)
+            }
+        }
     }
 }
 
@@ -57,4 +101,9 @@ allOpen {
 
 tasks.withType<Test> {
     useJUnitPlatform()
+    environment("TESTCONTAINERS_RYUK_DISABLED", "false")
+}
+
+tasks.withType<org.springframework.boot.gradle.tasks.run.BootRun> {
+    args("--spring.profiles.active=dev")
 }
