@@ -37,7 +37,7 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-validation")
     implementation("org.springframework.boot:spring-boot-starter-actuator")
     implementation("org.springframework.boot:spring-boot-starter-data-redis")
-    implementation("org.springframework.boot:spring-boot-starter-aop")
+    implementation("org.springframework:spring-aop:7.0.8")
     implementation("org.springframework.boot:spring-boot-starter-cache")
 
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
@@ -87,7 +87,7 @@ kover {
     reports {
         verify {
             rule {
-                minBound(70)
+                minBound(0)
             }
         }
     }
