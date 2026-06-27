@@ -5,7 +5,6 @@ import org.springframework.data.domain.Persistable
 import java.math.BigDecimal
 import java.time.Instant
 import java.util.*
-import kotlin.jvm.Transient
 
 @Entity
 @Table(name = "user_balances")
@@ -28,7 +27,7 @@ class UserBalance(
 
     @Version
     @Column(name = "version", nullable = false)
-    val version: Long = 0L,
+    var version: Long = 0L,
 
     @Column(name = "last_operation_at")
     var lastOperationAt: Instant? = null

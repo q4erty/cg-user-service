@@ -7,7 +7,7 @@ spring:
     name: user-service
 
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:cloud_gaming_db}
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:gaming_platform}
     username: ${DB_USER}
     password: ${DB_PASSWORD}
     hikari:

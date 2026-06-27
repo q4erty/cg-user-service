@@ -128,8 +128,10 @@ class UserRepositoryTest : AbstractJpaTest() {
         val user = createTestUser(keycloakId = "delete-${UUID.randomUUID()}")
         assertThat(userBalanceRepository.existsByUserId(user.id)).isTrue
 
-        userBalanceRepository.deleteById(user.id)
-        userRepository.delete(user)
+        userRepository.flush()
+        entityManager.clear()
+
+        userRepository.deleteById(user.id)
         userRepository.flush()
 
         assertThat(userRepository.findById(user.id)).isEmpty

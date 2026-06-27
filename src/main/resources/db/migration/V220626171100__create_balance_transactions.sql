@@ -22,7 +22,7 @@ CREATE TABLE balance_transactions
 CREATE INDEX idx_bt_user_id_created_at
     ON balance_transactions (user_id, created_at DESC);
 
-CREATE INDEX idx_bt_idempotency_key
+CREATE UNIQUE INDEX uq_bt_idempotency_key
     ON balance_transactions (idempotency_key);
 
 CREATE INDEX idx_bt_session_id

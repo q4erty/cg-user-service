@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Modifying
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
 import org.springframework.stereotype.Repository
+import org.springframework.transaction.annotation.Transactional
 import java.time.Instant
 import java.util.*
 
@@ -19,6 +20,7 @@ interface UserRepository : JpaRepository<User, UUID> {
     fun findByEmailContainingIgnoreCase(email: String, pageable: org.springframework.data.domain.Pageable):
             org.springframework.data.domain.Page<User>
 
+    @Transactional
     @Modifying(clearAutomatically = true)
     @Query("UPDATE User u SET u.lastLoginAt = :timestamp WHERE u.keycloakId = :keycloakId")
     fun updateLastLoginAt(
