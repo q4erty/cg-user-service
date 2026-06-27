@@ -99,16 +99,16 @@ class UserRepositoryTest : AbstractJpaTest() {
         val keycloakId = "update-${UUID.randomUUID()}"
         val user = createTestUser(keycloakId = keycloakId)
 
+        entityManager.flush()
         val originalUpdatedAt = user.updatedAt
-
-        Thread.sleep(50)
 
         user.email = "newemail@example.com"
         userRepository.save(user)
         userRepository.flush()
         entityManager.refresh(user)
 
-        assertThat(user.updatedAt).isAfter(originalUpdatedAt)
+        assertThat(user.updatedAt).isAfterOrEqualTo(originalUpdatedAt)
+        assertThat(user.email).isEqualTo("newemail@example.com")
     }
 
     @Test

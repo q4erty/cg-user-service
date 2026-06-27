@@ -54,27 +54,23 @@ class BalanceTransactionRepositoryTest : AbstractJpaTest() {
     @Test
     fun `should return transactions ordered by createdAt DESC`() {
         val user = createTestUser(keycloakId = "k1-${UUID.randomUUID()}")
+        val now = Instant.now()
 
-        val txn1 = balanceTransactionRepository.save(
-            BalanceTransaction(
-                userId = user.id, amount = BigDecimal("100.00"),
-                type = TransactionType.DEPOSIT, idempotencyKey = "k1"
-            )
-        )
-        Thread.sleep(10)
-        val txn2 = balanceTransactionRepository.save(
-            BalanceTransaction(
-                userId = user.id, amount = BigDecimal("-50.00"),
-                type = TransactionType.SESSION_DEBIT, idempotencyKey = "k2"
-            )
-        )
-        Thread.sleep(10)
-        val txn3 = balanceTransactionRepository.save(
-            BalanceTransaction(
-                userId = user.id, amount = BigDecimal("10.00"),
-                type = TransactionType.BONUS, idempotencyKey = "k3"
-            )
-        )
+        val txn1 = balanceTransactionRepository.save(BalanceTransaction(
+            userId = user.id, amount = BigDecimal("100.00"),
+            type = TransactionType.DEPOSIT, idempotencyKey = "k1",
+            createdAt = now.minusSeconds(20)
+        ))
+        val txn2 = balanceTransactionRepository.save(BalanceTransaction(
+            userId = user.id, amount = BigDecimal("-50.00"),
+            type = TransactionType.SESSION_DEBIT, idempotencyKey = "k2",
+            createdAt = now.minusSeconds(10)
+        ))
+        val txn3 = balanceTransactionRepository.save(BalanceTransaction(
+            userId = user.id, amount = BigDecimal("10.00"),
+            type = TransactionType.BONUS, idempotencyKey = "k3",
+            createdAt = now
+        ))
 
         val page = balanceTransactionRepository.findByUserIdOrderByCreatedAtDesc(
             user.id, PageRequest.of(0, 10)
@@ -89,17 +85,16 @@ class BalanceTransactionRepositoryTest : AbstractJpaTest() {
     @Test
     fun `should paginate transactions correctly`() {
         val user = createTestUser(keycloakId = "k1-${UUID.randomUUID()}")
+        val now = Instant.now()
 
         repeat(5) { i ->
-            balanceTransactionRepository.save(
-                BalanceTransaction(
-                    userId = user.id,
-                    amount = BigDecimal("${i * 10}"),
-                    type = TransactionType.DEPOSIT,
-                    idempotencyKey = "page-k-$i"
-                )
-            )
-            Thread.sleep(5)
+            balanceTransactionRepository.save(BalanceTransaction(
+                userId = user.id,
+                amount = BigDecimal("${i * 10}"),
+                type = TransactionType.DEPOSIT,
+                idempotencyKey = "page-k-$i",
+                createdAt = now.minusSeconds((5 - i).toLong())
+            ))
         }
 
         val page0 = balanceTransactionRepository.findByUserIdOrderByCreatedAtDesc(
