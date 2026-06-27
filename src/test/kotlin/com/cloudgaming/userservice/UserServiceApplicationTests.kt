@@ -5,7 +5,7 @@ import org.junit.jupiter.api.Test
 import org.springframework.boot.test.context.SpringBootTest
 
 @SpringBootTest
-@Disabled
+@Disabled("Requires full infrastructure: Redis, Kafka, Keycloak, DB")
 class UserServiceApplicationTests {
 
     @Test

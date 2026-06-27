@@ -37,7 +37,7 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-validation")
     implementation("org.springframework.boot:spring-boot-starter-actuator")
     implementation("org.springframework.boot:spring-boot-starter-data-redis")
-    implementation("org.springframework:spring-aop:7.0.8")
+    implementation("org.springframework:spring-aop")
     implementation("org.springframework.boot:spring-boot-starter-cache")
 
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
@@ -46,6 +46,7 @@ dependencies {
     runtimeOnly("org.postgresql:postgresql")
     implementation("org.flywaydb:flyway-core")
     implementation("org.flywaydb:flyway-database-postgresql")
+    implementation("org.springframework.boot:spring-boot-starter-flyway")
 
     implementation("org.springframework.kafka:spring-kafka")
 
@@ -66,9 +67,11 @@ dependencies {
     testImplementation("org.springframework.kafka:spring-kafka-test")
 
     testImplementation(enforcedPlatform("org.testcontainers:testcontainers-bom:${property("testcontainersVersion")}"))
+    testImplementation("org.springframework.boot:spring-boot-starter-data-jpa-test")
     testImplementation("org.testcontainers:junit-jupiter")
     testImplementation("org.testcontainers:postgresql")
     testImplementation("org.testcontainers:testcontainers")
+    testImplementation("org.springframework.boot:spring-boot-testcontainers")
     testImplementation("com.redis:testcontainers-redis:2.2.2")
     testImplementation("com.github.dasniko:testcontainers-keycloak:3.3.0")
 }
@@ -87,7 +90,7 @@ kover {
     reports {
         verify {
             rule {
-                minBound(0)
+                minBound(70)
             }
         }
     }
