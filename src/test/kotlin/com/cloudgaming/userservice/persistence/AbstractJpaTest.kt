@@ -1,5 +1,6 @@
 package com.cloudgaming.userservice.persistence
 
+import com.cloudgaming.userservice.container.PostgresTestContainerSingleton
 import com.cloudgaming.userservice.domain.User
 import com.cloudgaming.userservice.domain.UserBalance
 import jakarta.persistence.EntityManager
