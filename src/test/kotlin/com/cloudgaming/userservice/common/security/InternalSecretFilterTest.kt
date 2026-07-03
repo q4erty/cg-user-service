@@ -10,6 +10,8 @@ import org.mockito.Mockito.*
 import org.springframework.mock.web.MockHttpServletRequest
 import org.springframework.mock.web.MockHttpServletResponse
 import org.springframework.security.core.context.SecurityContextHolder
+import com.cloudgaming.userservice.constants.HeaderNames
+import com.cloudgaming.userservice.constants.Role
 
 class InternalSecretFilterTest {
 
@@ -68,7 +70,7 @@ class InternalSecretFilterTest {
         @Test
         fun `should authenticate and continue when secret is valid`() {
             val request = MockHttpServletRequest("POST", "/api/internal/users/123/balance/operations")
-            request.addHeader(InternalSecretFilter.SECRET_HEADER, expectedSecret)
+            request.addHeader(HeaderNames.INTERNAL_SECRET, expectedSecret)
             val response = MockHttpServletResponse()
 
             filter.doFilter(request, response, chain)
@@ -78,13 +80,13 @@ class InternalSecretFilterTest {
             val auth = SecurityContextHolder.getContext().authentication
             assertThat(auth).isNotNull
             assertThat(auth!!.name).isEqualTo("internal-service")
-            assertThat(auth.authorities).anyMatch { it.authority == InternalSecretFilter.ROLE_INTERNAL }
+            assertThat(auth.authorities).anyMatch { it.authority == Role.INTERNAL.authority }
         }
 
         @Test
         fun `should authenticate for GET on internal path`() {
             val request = MockHttpServletRequest("GET", "/api/internal/users/123/balance")
-            request.addHeader(InternalSecretFilter.SECRET_HEADER, expectedSecret)
+            request.addHeader(HeaderNames.INTERNAL_SECRET, expectedSecret)
             val response = MockHttpServletResponse()
 
             filter.doFilter(request, response, chain)
@@ -113,7 +115,7 @@ class InternalSecretFilterTest {
         @Test
         fun `should return 401 when secret is wrong`() {
             val request = MockHttpServletRequest("POST", "/api/internal/users/123/balance/operations")
-            request.addHeader(InternalSecretFilter.SECRET_HEADER, "wrong-secret")
+            request.addHeader(HeaderNames.INTERNAL_SECRET, "wrong-secret")
             val response = MockHttpServletResponse()
 
             filter.doFilter(request, response, chain)
@@ -125,7 +127,7 @@ class InternalSecretFilterTest {
         @Test
         fun `should return 401 when secret is empty string`() {
             val request = MockHttpServletRequest("POST", "/api/internal/users/123/balance/operations")
-            request.addHeader(InternalSecretFilter.SECRET_HEADER, "")
+            request.addHeader(HeaderNames.INTERNAL_SECRET, "")
             val response = MockHttpServletResponse()
 
             filter.doFilter(request, response, chain)
@@ -137,7 +139,7 @@ class InternalSecretFilterTest {
         @Test
         fun `should not set authentication when secret is invalid`() {
             val request = MockHttpServletRequest("POST", "/api/internal/users/123/balance/operations")
-            request.addHeader(InternalSecretFilter.SECRET_HEADER, "wrong-secret")
+            request.addHeader(HeaderNames.INTERNAL_SECRET, "wrong-secret")
             val response = MockHttpServletResponse()
 
             filter.doFilter(request, response, chain)
@@ -152,7 +154,7 @@ class InternalSecretFilterTest {
         @Test
         fun `should override already-authenticated context when internal secret is valid`() {
             val request = MockHttpServletRequest("POST", "/api/internal/users/123/balance/operations")
-            request.addHeader(InternalSecretFilter.SECRET_HEADER, expectedSecret)
+            request.addHeader(HeaderNames.INTERNAL_SECRET, expectedSecret)
             request.addHeader("Authorization", "Bearer some-jwt-token")
             val response = MockHttpServletResponse()
 

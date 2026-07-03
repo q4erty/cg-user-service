@@ -1,7 +1,11 @@
 package com.cloudgaming.userservice.config
 
 import com.cloudgaming.userservice.common.security.InternalSecretFilter
+import com.cloudgaming.userservice.constants.Role
+import com.cloudgaming.userservice.constants.SecurityPath
 import com.cloudgaming.userservice.integration.keycloak.KeycloakRoleConverter
+import org.springframework.boot.context.properties.EnableConfigurationProperties
+import org.springframework.boot.web.servlet.FilterRegistrationBean
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity
@@ -9,19 +13,20 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity
 import org.springframework.security.config.http.SessionCreationPolicy
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter
-import org.springframework.security.web.SecurityFilterChain
 import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter
+import org.springframework.security.web.SecurityFilterChain
 import org.springframework.web.cors.CorsConfiguration
 import org.springframework.web.cors.CorsConfigurationSource
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource
-import org.springframework.boot.web.servlet.FilterRegistrationBean
 
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
+@EnableConfigurationProperties(CorsProperties::class)
 class SecurityConfig(
     private val keycloakRoleConverter: KeycloakRoleConverter,
-    private val internalSecretFilter: InternalSecretFilter
+    private val internalSecretFilter: InternalSecretFilter,
+    private val corsProperties: CorsProperties
 ) {
 
     @Bean
@@ -34,11 +39,11 @@ class SecurityConfig(
             }
             .authorizeHttpRequests { auth ->
                 auth
-                    .requestMatchers("/actuator/health", "/actuator/info").permitAll()
-                    .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
-                    .requestMatchers("/api/internal/**").hasRole("INTERNAL")
-                    .requestMatchers("/api/v1/users/me/**").hasRole("PLAYER")
-                    .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
+                    .requestMatchers(SecurityPath.ACTUATOR_HEALTH.pattern, SecurityPath.ACTUATOR_INFO.pattern).permitAll()
+                    .requestMatchers(SecurityPath.SWAGGER_UI.pattern, SecurityPath.API_DOCS.pattern).permitAll()
+                    .requestMatchers(SecurityPath.INTERNAL_API.pattern).hasRole(Role.INTERNAL.roleName)
+                    .requestMatchers(SecurityPath.USERS_ME.pattern).hasRole(Role.PLAYER.roleName)
+                    .requestMatchers(SecurityPath.ADMIN_API.pattern).hasRole(Role.ADMIN.roleName)
                     .anyRequest().authenticated()
             }
             .oauth2ResourceServer { oauth2 ->
@@ -65,15 +70,12 @@ class SecurityConfig(
     @Bean
     fun corsConfigurationSource(): CorsConfigurationSource {
         val config = CorsConfiguration().apply {
-            allowedOrigins = listOf(
-                "http://localhost:3000",
-                "http://localhost:8080"
-            )
-            allowedMethods = listOf("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
-            allowedHeaders = listOf("*")
-            exposedHeaders = listOf("X-Request-Id", "X-Internal-Secret")
-            allowCredentials = true
-            maxAge = 3600L
+            allowedOrigins = corsProperties.allowedOrigins
+            allowedMethods = corsProperties.allowedMethods
+            allowedHeaders = corsProperties.allowedHeaders
+            exposedHeaders = corsProperties.exposedHeaders
+            allowCredentials = corsProperties.allowedOrigins.none { it == "*" }
+            maxAge = corsProperties.maxAge
         }
 
         return UrlBasedCorsConfigurationSource().apply {

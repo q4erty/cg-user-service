@@ -1,5 +1,6 @@
 package com.cloudgaming.userservice.common.security
 
+import com.cloudgaming.userservice.constants.Role
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.AfterEach
@@ -150,31 +151,31 @@ class SecurityUtilsTest {
         @Test
         fun `should return true when user has role`() {
             val jwt = buildJwt()
-            setJwtAuth(jwt, authorities = listOf("ROLE_PLAYER", "ROLE_PREMIUM"))
+            setJwtAuth(jwt, authorities = listOf(Role.PLAYER.authority, Role.PREMIUM.authority))
 
-            assertThat(securityUtils.hasRole("PLAYER")).isTrue
-            assertThat(securityUtils.hasRole("PREMIUM")).isTrue
+            assertThat(securityUtils.hasRole(Role.PLAYER)).isTrue
+            assertThat(securityUtils.hasRole(Role.PREMIUM)).isTrue
         }
 
         @Test
         fun `should return false when user does not have role`() {
             val jwt = buildJwt()
-            setJwtAuth(jwt, authorities = listOf("ROLE_PLAYER"))
+            setJwtAuth(jwt, authorities = listOf(Role.PLAYER.authority))
 
-            assertThat(securityUtils.hasRole("ADMIN")).isFalse
+            assertThat(securityUtils.hasRole(Role.ADMIN)).isFalse
         }
 
         @Test
         fun `should handle lowercase role name`() {
             val jwt = buildJwt()
-            setJwtAuth(jwt, authorities = listOf("ROLE_PLAYER"))
+            setJwtAuth(jwt, authorities = listOf(Role.PLAYER.authority))
 
-            assertThat(securityUtils.hasRole("player")).isTrue
+            assertThat(securityUtils.hasRole(Role.PLAYER)).isTrue
         }
 
         @Test
         fun `should return false when no authentication`() {
-            assertThat(securityUtils.hasRole("PLAYER")).isFalse
+            assertThat(securityUtils.hasRole(Role.PLAYER)).isFalse
         }
     }
 
@@ -210,7 +211,7 @@ class SecurityUtilsTest {
         fun `should return true when has ROLE_INTERNAL`() {
             val auth = UsernamePasswordAuthenticationToken(
                 "internal-service", null,
-                listOf(SimpleGrantedAuthority("ROLE_INTERNAL"))
+                listOf(SimpleGrantedAuthority(Role.INTERNAL.authority))
             )
             SecurityContextHolder.getContext().authentication = auth
 
@@ -220,7 +221,7 @@ class SecurityUtilsTest {
         @Test
         fun `should return false for regular PLAYER request`() {
             val jwt = buildJwt()
-            setJwtAuth(jwt, authorities = listOf("ROLE_PLAYER"))
+            setJwtAuth(jwt, authorities = listOf(Role.PLAYER.authority))
 
             assertThat(securityUtils.isInternalRequest()).isFalse
         }

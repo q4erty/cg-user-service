@@ -8,8 +8,8 @@ spring:
 
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:gaming_platform}
-    username: ${DB_USER}
-    password: ${DB_PASSWORD}
+    username: ${DB_USER:postgres}
+    password: ${DB_PASSWORD:postgres}
     hikari:
       maximum-pool-size: ${DB_POOL_MAX:20}
       minimum-idle: ${DB_POOL_MIN:5}
@@ -77,12 +77,24 @@ spring:
 
 keycloak:
   admin:
-    server-url: ${KEYCLOAK_URL:http://localhost:8080}
-    realm: ${KEYCLOAK_REALM:cloud-gaming}
+    server-url: ${KEYCLOAK_URL:http://localhost:8180}
+    realm: ${KEYCLOAK_ADMIN_REALM:cloud-gaming}
+    target-realm: ${KEYCLOAK_TARGET_REALM:cloud-gaming}
     client-id: ${KEYCLOAK_ADMIN_CLIENT_ID:cloud-gaming-backend}
     client-secret: ${KEYCLOAK_BACKEND_SECRET}
 
 app:
+  cors:
+    allowed-origins:
+      - http://localhost:3000
+      - http://localhost:8080
+    allowed-methods: [GET, POST, PUT, PATCH, DELETE, OPTIONS]
+    allowed-headers: ["*"]
+    exposed-headers:
+      - X-Request-Id
+      - X-Internal-Secret
+    max-age: 3600
+
   security:
     internal-secret: ${INTERNAL_SECRET}
 

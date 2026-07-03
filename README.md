@@ -1,6 +1,6 @@
 # cg-user-service
 
-[![CI Pipeline](https://github.com/q4erty/cg-user-service/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/q4erty/cg-user-service/actions)
+[![CI Pipeline](https://github.com/q4erty/cg-user-service/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/q4erty/cg-user-service/actions/workflows/build-and-test.yml)
 [![codecov](https://codecov.io/gh/q4erty/cg-user-service/graph/badge.svg?token=IESOVS2W2R)](https://codecov.io/gh/q4erty/cg-user-service)
 
 # Environment Variables
