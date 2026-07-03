@@ -66,6 +66,7 @@ dependencies {
     testImplementation("org.springframework.boot:spring-boot-starter-webmvc-test")
     testImplementation("org.springframework.security:spring-security-test")
     testImplementation("org.springframework.kafka:spring-kafka-test")
+    testImplementation("org.mockito.kotlin:mockito-kotlin:5.4.0")
 
     testImplementation(enforcedPlatform("org.testcontainers:testcontainers-bom:${property("testcontainersVersion")}"))
     testImplementation("org.springframework.boot:spring-boot-starter-data-jpa-test")
@@ -90,6 +91,16 @@ kotlin {
 
 kover {
     reports {
+        filters {
+            excludes {
+                packages("com.cloudgaming.userservice.exception")
+                packages("com.cloudgaming.userservice.domain")
+                packages("com.cloudgaming.userservice.config")
+                packages("com.cloudgaming.userservice.constants")
+                classes("com.cloudgaming.userservice.UserServiceApplicationKt")
+            }
+        }
+
         verify {
             rule {
                 minBound(70)

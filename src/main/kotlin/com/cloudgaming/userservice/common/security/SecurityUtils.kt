@@ -1,5 +1,7 @@
 package com.cloudgaming.userservice.common.security
 
+import com.cloudgaming.userservice.constants.JwtClaim
+import com.cloudgaming.userservice.constants.Role
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.security.oauth2.jwt.Jwt
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken
@@ -13,14 +15,14 @@ class SecurityUtils {
         return jwt.subject ?: throw IllegalStateException("JWT subject (keycloak_id) is null")
     }
 
-    fun getCurrentEmail(): String? = getCurrentJwt().claims["email"] as? String
+    fun getCurrentEmail(): String? = getCurrentJwt().claims[JwtClaim.EMAIL.claimName] as? String
 
     fun getCurrentUsername(): String? =
-        getCurrentJwt().claims["preferred_username"] as? String
+        getCurrentJwt().claims[JwtClaim.PREFERRED_USERNAME.claimName] as? String
 
-    fun hasRole(role: String): Boolean {
+    fun hasRole(role: Role): Boolean {
         val auth = SecurityContextHolder.getContext().authentication ?: return false
-        return auth.authorities.any { it.authority == "ROLE_${role.uppercase(java.util.Locale.ROOT)}" }
+        return auth.authorities.any { it.authority == role.authority }
     }
 
     fun isJwtAuthenticated(): Boolean {
@@ -30,7 +32,7 @@ class SecurityUtils {
 
     fun isInternalRequest(): Boolean {
         val auth = SecurityContextHolder.getContext().authentication ?: return false
-        return auth.authorities.any { it.authority == "ROLE_INTERNAL" }
+        return auth.authorities.any { it.authority == Role.INTERNAL.authority }
     }
 
     private fun getCurrentJwt(): Jwt {

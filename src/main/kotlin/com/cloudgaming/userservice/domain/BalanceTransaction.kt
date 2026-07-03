@@ -49,11 +49,3 @@ class BalanceTransaction(
     override fun toString(): String =
         "BalanceTransaction(id=$id, userId=$userId, amount=$amount, type=$type, idempotencyKey='$idempotencyKey')"
 }
-
-enum class TransactionType {
-    DEPOSIT,
-    SESSION_DEBIT,
-    REFUND,
-    BONUS,
-    ADMIN_ADJUSTMENT
-}
