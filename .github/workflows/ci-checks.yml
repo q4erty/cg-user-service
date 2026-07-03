@@ -36,7 +36,9 @@ jobs:
         run: ./gradlew koverXmlReport
 
       - name: Upload coverage reports to Codecov
-        if: secrets.CODECOV_TOKEN != ''
+        env:
+          COV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        if: env.COV_TOKEN != ''
         uses: codecov/codecov-action@v4
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
