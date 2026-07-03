@@ -25,7 +25,7 @@ repositories {
 
 extra["springCloudVersion"] = "2025.1.2"
 extra["testcontainersVersion"] = "1.20.4"
-extra["redissonVersion"] = "3.27.2"
+extra["redissonVersion"] = "4.6.0"
 extra["resilience4jVersion"] = "2.2.0"
 extra["springdocVersion"] = "2.3.0"
 
@@ -63,6 +63,7 @@ dependencies {
     implementation("net.logstash.logback:logstash-logback-encoder:7.4")
 
     testImplementation("org.springframework.boot:spring-boot-starter-test")
+    testImplementation("org.springframework.boot:spring-boot-starter-webmvc-test")
     testImplementation("org.springframework.security:spring-security-test")
     testImplementation("org.springframework.kafka:spring-kafka-test")
 
@@ -70,6 +71,7 @@ dependencies {
     testImplementation("org.springframework.boot:spring-boot-starter-data-jpa-test")
     testImplementation("org.testcontainers:junit-jupiter")
     testImplementation("org.testcontainers:postgresql")
+    testImplementation("org.testcontainers:kafka")
     testImplementation("org.testcontainers:testcontainers")
     testImplementation("org.springframework.boot:spring-boot-testcontainers")
     testImplementation("com.redis:testcontainers-redis:2.2.2")

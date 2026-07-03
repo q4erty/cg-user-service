@@ -1,4 +1,4 @@
-package com.cloudgaming.userservice.persistence
+package com.cloudgaming.userservice.container
 
 import org.testcontainers.containers.PostgreSQLContainer
 import org.testcontainers.utility.DockerImageName
