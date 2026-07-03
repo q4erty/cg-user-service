@@ -14,6 +14,7 @@ import org.springframework.security.oauth2.server.resource.web.authentication.Be
 import org.springframework.web.cors.CorsConfiguration
 import org.springframework.web.cors.CorsConfigurationSource
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource
+import org.springframework.boot.web.servlet.FilterRegistrationBean
 
 @Configuration
 @EnableWebSecurity
@@ -54,6 +55,11 @@ class SecurityConfig(
         return JwtAuthenticationConverter().apply {
             setJwtGrantedAuthoritiesConverter(keycloakRoleConverter)
         }
+    }
+
+    @Bean
+    fun internalSecretFilterRegistration(filter: InternalSecretFilter): FilterRegistrationBean<InternalSecretFilter> {
+        return FilterRegistrationBean(filter).apply { isEnabled = false }
     }
 
     @Bean

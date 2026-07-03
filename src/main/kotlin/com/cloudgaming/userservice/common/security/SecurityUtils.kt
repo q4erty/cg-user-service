@@ -20,7 +20,7 @@ class SecurityUtils {
 
     fun hasRole(role: String): Boolean {
         val auth = SecurityContextHolder.getContext().authentication ?: return false
-        return auth.authorities.any { it.authority == "ROLE_${role.uppercase()}" }
+        return auth.authorities.any { it.authority == "ROLE_${role.uppercase(java.util.Locale.ROOT)}" }
     }
 
     fun isJwtAuthenticated(): Boolean {
