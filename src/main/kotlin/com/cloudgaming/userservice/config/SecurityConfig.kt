@@ -10,7 +10,7 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.config.http.SessionCreationPolicy
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter
 import org.springframework.security.web.SecurityFilterChain
-import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter
 import org.springframework.web.cors.CorsConfiguration
 import org.springframework.web.cors.CorsConfigurationSource
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource
@@ -36,7 +36,7 @@ class SecurityConfig(
                     .requestMatchers("/actuator/health", "/actuator/info").permitAll()
                     .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
                     .requestMatchers("/api/internal/**").hasRole("INTERNAL")
-                    .requestMatchers("/api/v1/users/me/**").hasAnyRole("PLAYER", "ADMIN")
+                    .requestMatchers("/api/v1/users/me/**").hasRole("PLAYER")
                     .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
                     .anyRequest().authenticated()
             }
@@ -45,7 +45,7 @@ class SecurityConfig(
                     jwt.jwtAuthenticationConverter(jwtAuthenticationConverter())
                 }
             }
-            .addFilterBefore(internalSecretFilter, UsernamePasswordAuthenticationFilter::class.java)
+            .addFilterBefore(internalSecretFilter, BearerTokenAuthenticationFilter::class.java)
             .build()
     }
 

@@ -150,7 +150,7 @@ class InternalSecretFilterTest {
     inner class EdgeCases {
 
         @Test
-        fun `should not interfere with already-authenticated context`() {
+        fun `should override already-authenticated context when internal secret is valid`() {
             val request = MockHttpServletRequest("POST", "/api/internal/users/123/balance/operations")
             request.addHeader(InternalSecretFilter.SECRET_HEADER, expectedSecret)
             request.addHeader("Authorization", "Bearer some-jwt-token")
