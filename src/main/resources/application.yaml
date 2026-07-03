@@ -81,7 +81,7 @@ keycloak:
     realm: ${KEYCLOAK_ADMIN_REALM:cloud-gaming}
     target-realm: ${KEYCLOAK_TARGET_REALM:cloud-gaming}
     client-id: ${KEYCLOAK_ADMIN_CLIENT_ID:cloud-gaming-backend}
-    client-secret: ${KEYCLOAK_BACKEND_SECRET:dev-only-secret}
+    client-secret: ${KEYCLOAK_BACKEND_SECRET}
 
 app:
   cors:
@@ -96,7 +96,7 @@ app:
     max-age: 3600
 
   security:
-    internal-secret: ${INTERNAL_SECRET:dev-only-internal-secret}
+    internal-secret: ${INTERNAL_SECRET}
 
   balance:
     low-threshold: 100.00

@@ -74,7 +74,7 @@ class SecurityConfig(
             allowedMethods = corsProperties.allowedMethods
             allowedHeaders = corsProperties.allowedHeaders
             exposedHeaders = corsProperties.exposedHeaders
-            allowCredentials = true
+            allowCredentials = corsProperties.allowedOrigins.none { it == "*" }
             maxAge = corsProperties.maxAge
         }
 

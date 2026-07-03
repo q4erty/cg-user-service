@@ -35,6 +35,7 @@ class UserServiceApplicationTests {
             registry.add("keycloak.admin.target-realm") { KeycloakTestContainerSingleton.TARGET_REALM }
             registry.add("keycloak.admin.client-id") { "admin-cli" }
             registry.add("keycloak.admin.client-secret") { "admin" }
+            registry.add("app.security.internal-secret") { "test-internal-secret" }
         }
     }
 
