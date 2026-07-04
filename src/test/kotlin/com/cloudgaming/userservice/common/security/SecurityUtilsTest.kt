@@ -13,6 +13,7 @@ import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.security.oauth2.jwt.Jwt
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken
 import java.time.Instant
+import java.util.UUID
 
 class SecurityUtilsTest {
 
@@ -100,6 +101,60 @@ class SecurityUtilsTest {
             setJwtAuth(jwt)
 
             assertThatThrownBy { securityUtils.getCurrentKeycloakId() }
+                .isInstanceOf(IllegalStateException::class.java)
+                .hasMessageContaining("subject")
+        }
+    }
+
+    @Nested
+    inner class GetCurrentUserId {
+
+        @Test
+        fun `should return UUID when keycloak_id is valid UUID`() {
+            val testUuid = UUID.randomUUID()
+            val jwt = buildJwt(subject = testUuid.toString())
+            setJwtAuth(jwt)
+
+            val userId = securityUtils.getCurrentUserId()
+
+            assertThat(userId).isEqualTo(testUuid)
+        }
+
+        @Test
+        fun `should throw IllegalArgumentException when keycloak_id is not UUID`() {
+            val jwt = buildJwt(subject = "google-oauth-12345")
+            setJwtAuth(jwt)
+
+            assertThatThrownBy { securityUtils.getCurrentUserId() }
+                .isInstanceOf(IllegalArgumentException::class.java)
+        }
+
+        @Test
+        fun `should throw when no authentication in context`() {
+            assertThatThrownBy { securityUtils.getCurrentUserId() }
+                .isInstanceOf(IllegalStateException::class.java)
+                .hasMessageContaining("No authentication")
+        }
+
+        @Test
+        fun `should throw when authentication is not JwtAuthenticationToken`() {
+            val auth = UsernamePasswordAuthenticationToken(
+                "user", "pass",
+                listOf(SimpleGrantedAuthority(Role.PLAYER.authority))
+            )
+            SecurityContextHolder.getContext().authentication = auth
+
+            assertThatThrownBy { securityUtils.getCurrentUserId() }
+                .isInstanceOf(IllegalStateException::class.java)
+                .hasMessageContaining("Expected JwtAuthenticationToken")
+        }
+
+        @Test
+        fun `should throw when JWT subject is null`() {
+            val jwt = buildJwt(subject = "")
+            setJwtAuth(jwt)
+
+            assertThatThrownBy { securityUtils.getCurrentUserId() }
                 .isInstanceOf(IllegalStateException::class.java)
                 .hasMessageContaining("subject")
         }

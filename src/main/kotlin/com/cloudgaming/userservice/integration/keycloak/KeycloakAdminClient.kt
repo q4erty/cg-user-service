@@ -1,8 +1,9 @@
 package com.cloudgaming.userservice.integration.keycloak
 
 import com.cloudgaming.userservice.constants.KeycloakDefaults
-import com.cloudgaming.userservice.exception.KeycloakApiException
-import com.cloudgaming.userservice.exception.RoleNotFoundException
+import com.cloudgaming.userservice.common.exception.KeycloakApiException
+import com.cloudgaming.userservice.common.exception.RoleNotFoundException
+import com.cloudgaming.userservice.common.exception.UserNotFoundException
 import jakarta.ws.rs.NotFoundException
 import org.keycloak.admin.client.Keycloak
 import org.keycloak.representations.idm.RoleRepresentation
@@ -32,6 +33,8 @@ class KeycloakAdminClient(
             logger.info("Assigned role '{}' to user '{}'", roleName, keycloakUserId)
         } catch (e: RoleNotFoundException) {
             throw e
+        } catch (e: NotFoundException) {
+            throw UserNotFoundException.byKeycloakId(keycloakUserId)
         } catch (e: Exception) {
             logger.error("Failed to assign role '{}' to user '{}': {}", roleName, keycloakUserId, e.message)
             throw KeycloakApiException("Failed to assign role: ${e.message}", e)
@@ -52,6 +55,8 @@ class KeycloakAdminClient(
             logger.info("Removed role '{}' from user '{}'", roleName, keycloakUserId)
         } catch (e: RoleNotFoundException) {
             throw e
+        } catch (e: NotFoundException) {
+            throw UserNotFoundException.byKeycloakId(keycloakUserId)
         } catch (e: Exception) {
             logger.error("Failed to remove role '{}' from user '{}': {}", roleName, keycloakUserId, e.message)
             throw KeycloakApiException("Failed to remove role: ${e.message}", e)
@@ -67,6 +72,8 @@ class KeycloakAdminClient(
                 .listAll()
                 .map { it.name }
                 .toSet()
+        } catch (e: NotFoundException) {
+            throw UserNotFoundException.byKeycloakId(keycloakUserId)
         } catch (e: Exception) {
             logger.error("Failed to get roles for user '{}': {}", keycloakUserId, e.message)
             throw KeycloakApiException("Failed to get user roles: ${e.message}", e)
@@ -79,6 +86,8 @@ class KeycloakAdminClient(
                 .users()
                 .searchByEmail(email, true)
                 .firstOrNull()
+        } catch (e: NotFoundException) {
+            null
         } catch (e: Exception) {
             logger.error("Failed to find user by email '{}': {}", email, e.message)
             throw KeycloakApiException("Failed to find user: ${e.message}", e)
