@@ -83,7 +83,8 @@ class GlobalExceptionHandler : ResponseEntityExceptionHandler() {
             error = "METHOD_NOT_ALLOWED",
             message = "Request method '${ex.method}' not supported",
             status = HttpStatus.METHOD_NOT_ALLOWED,
-            request = request
+            request = request,
+            headers = headers
         )
     }
 
@@ -97,7 +98,8 @@ class GlobalExceptionHandler : ResponseEntityExceptionHandler() {
             error = "UNSUPPORTED_MEDIA_TYPE",
             message = "Content type '${ex.contentType}' not supported",
             status = HttpStatus.UNSUPPORTED_MEDIA_TYPE,
-            request = request
+            request = request,
+            headers = headers
         )
     }
 
@@ -133,14 +135,15 @@ class GlobalExceptionHandler : ResponseEntityExceptionHandler() {
         error: String,
         message: String,
         status: HttpStatus,
-        request: WebRequest
+        request: WebRequest,
+        headers: HttpHeaders? = null
     ): ResponseEntity<Any>? {
         val errorResponse = ErrorResponse(
             error = error,
             message = message,
             path = (request.getDescription(false).removePrefix("uri="))
         )
-        return ResponseEntity.status(status).body(errorResponse)
+        return ResponseEntity.status(status).headers(headers ?: HttpHeaders()).body(errorResponse)
     }
 
     // 400 Bad Request: Role not found
