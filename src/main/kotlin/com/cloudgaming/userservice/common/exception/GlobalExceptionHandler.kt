@@ -8,11 +8,15 @@ import org.springframework.http.HttpStatusCode
 import org.springframework.http.ResponseEntity
 import org.springframework.security.access.AccessDeniedException
 import org.springframework.security.core.AuthenticationException
+import org.springframework.web.HttpMediaTypeNotSupportedException
+import org.springframework.web.HttpRequestMethodNotSupportedException
 import org.springframework.web.bind.MethodArgumentNotValidException
+import org.springframework.web.bind.MissingServletRequestParameterException
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.RestControllerAdvice
 import org.springframework.web.context.request.WebRequest
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler
+import org.springframework.web.servlet.NoHandlerFoundException
 import java.util.*
 
 /**
@@ -54,9 +58,8 @@ class GlobalExceptionHandler : ResponseEntityExceptionHandler() {
         status: HttpStatusCode,
         request: WebRequest
     ): ResponseEntity<Any>? {
-        val fieldErrors = ex.bindingResult.fieldErrors.associate { error ->
-            error.field to (error.defaultMessage ?: "invalid")
-        }
+        val fieldErrors = ex.bindingResult.fieldErrors
+            .groupBy({ it.field }, { it.defaultMessage ?: "invalid" })
 
         logger.warn("Validation failed: {}", fieldErrors)
 
@@ -68,6 +71,76 @@ class GlobalExceptionHandler : ResponseEntityExceptionHandler() {
         )
 
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse)
+    }
+
+    override fun handleHttpRequestMethodNotSupported(
+        ex: HttpRequestMethodNotSupportedException,
+        headers: HttpHeaders,
+        status: HttpStatusCode,
+        request: WebRequest
+    ): ResponseEntity<Any>? {
+        return createErrorResponse(
+            error = "METHOD_NOT_ALLOWED",
+            message = "Request method '${ex.method}' not supported",
+            status = HttpStatus.METHOD_NOT_ALLOWED,
+            request = request
+        )
+    }
+
+    override fun handleHttpMediaTypeNotSupported(
+        ex: HttpMediaTypeNotSupportedException,
+        headers: HttpHeaders,
+        status: HttpStatusCode,
+        request: WebRequest
+    ): ResponseEntity<Any>? {
+        return createErrorResponse(
+            error = "UNSUPPORTED_MEDIA_TYPE",
+            message = "Content type '${ex.contentType}' not supported",
+            status = HttpStatus.UNSUPPORTED_MEDIA_TYPE,
+            request = request
+        )
+    }
+
+    override fun handleMissingServletRequestParameter(
+        ex: MissingServletRequestParameterException,
+        headers: HttpHeaders,
+        status: HttpStatusCode,
+        request: WebRequest
+    ): ResponseEntity<Any>? {
+        return createErrorResponse(
+            error = "MISSING_PARAMETER",
+            message = "Missing required parameter: ${ex.parameterName}",
+            status = HttpStatus.BAD_REQUEST,
+            request = request
+        )
+    }
+
+    override fun handleNoHandlerFoundException(
+        ex: NoHandlerFoundException,
+        headers: HttpHeaders,
+        status: HttpStatusCode,
+        request: WebRequest
+    ): ResponseEntity<Any>? {
+        return createErrorResponse(
+            error = "NOT_FOUND",
+            message = "No endpoint found for ${ex.httpMethod} ${ex.requestURL}",
+            status = HttpStatus.NOT_FOUND,
+            request = request
+        )
+    }
+
+    private fun createErrorResponse(
+        error: String,
+        message: String,
+        status: HttpStatus,
+        request: WebRequest
+    ): ResponseEntity<Any>? {
+        val errorResponse = ErrorResponse(
+            error = error,
+            message = message,
+            path = (request.getDescription(false).removePrefix("uri="))
+        )
+        return ResponseEntity.status(status).body(errorResponse)
     }
 
     // 400 Bad Request: Role not found

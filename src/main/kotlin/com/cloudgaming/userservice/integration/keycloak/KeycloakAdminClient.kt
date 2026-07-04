@@ -34,7 +34,7 @@ class KeycloakAdminClient(
         } catch (e: RoleNotFoundException) {
             throw e
         } catch (e: NotFoundException) {
-            throw UserNotFoundException.byKeycloakId(keycloakUserId)
+            throw UserNotFoundException.byKeycloakId(keycloakUserId, e)
         } catch (e: Exception) {
             logger.error("Failed to assign role '{}' to user '{}': {}", roleName, keycloakUserId, e.message)
             throw KeycloakApiException("Failed to assign role: ${e.message}", e)
@@ -56,7 +56,7 @@ class KeycloakAdminClient(
         } catch (e: RoleNotFoundException) {
             throw e
         } catch (e: NotFoundException) {
-            throw UserNotFoundException.byKeycloakId(keycloakUserId)
+            throw UserNotFoundException.byKeycloakId(keycloakUserId, e)
         } catch (e: Exception) {
             logger.error("Failed to remove role '{}' from user '{}': {}", roleName, keycloakUserId, e.message)
             throw KeycloakApiException("Failed to remove role: ${e.message}", e)
@@ -73,7 +73,7 @@ class KeycloakAdminClient(
                 .map { it.name }
                 .toSet()
         } catch (e: NotFoundException) {
-            throw UserNotFoundException.byKeycloakId(keycloakUserId)
+            throw UserNotFoundException.byKeycloakId(keycloakUserId, e)
         } catch (e: Exception) {
             logger.error("Failed to get roles for user '{}': {}", keycloakUserId, e.message)
             throw KeycloakApiException("Failed to get user roles: ${e.message}", e)

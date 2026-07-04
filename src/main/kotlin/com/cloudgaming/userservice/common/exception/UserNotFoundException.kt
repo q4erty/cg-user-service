@@ -2,16 +2,13 @@ package com.cloudgaming.userservice.common.exception
 
 import java.util.UUID
 
-class UserNotFoundException private constructor(message: String) : RuntimeException(message) {
+class UserNotFoundException private constructor(message: String, cause: Throwable? = null) : RuntimeException(message, cause) {
 
     companion object {
-        fun byUserId(userId: UUID): UserNotFoundException =
-            UserNotFoundException("User with id=$userId not found")
+        fun byUserId(userId: UUID, cause: Throwable? = null): UserNotFoundException =
+            UserNotFoundException("User with id=$userId not found", cause)
 
-        fun byKeycloakId(keycloakId: String): UserNotFoundException =
-            UserNotFoundException("User with keycloakId='$keycloakId' not found")
-
-        operator fun invoke(message: String): UserNotFoundException =
-            UserNotFoundException(message)
+        fun byKeycloakId(keycloakId: String, cause: Throwable? = null): UserNotFoundException =
+            UserNotFoundException("User with keycloakId='$keycloakId' not found", cause)
     }
 }

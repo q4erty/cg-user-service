@@ -5,18 +5,32 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
+import org.springframework.core.MethodParameter
+import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
 import org.springframework.mock.web.MockHttpServletRequest
 import org.springframework.security.access.AccessDeniedException
 import org.springframework.security.core.AuthenticationException
 import org.springframework.validation.BeanPropertyBindingResult
 import org.springframework.validation.FieldError
+import org.springframework.web.bind.MethodArgumentNotValidException
+import org.springframework.web.context.request.ServletWebRequest
+import java.lang.reflect.Method
 import java.math.BigDecimal
 import java.util.*
 
 class GlobalExceptionHandlerTest {
 
-    private val handler = GlobalExceptionHandler()
+    private class TestableGlobalExceptionHandler : GlobalExceptionHandler() {
+        fun invokeHandleMethodArgumentNotValid(
+            ex: MethodArgumentNotValidException,
+            headers: HttpHeaders,
+            status: HttpStatus,
+            request: ServletWebRequest
+        ) = handleMethodArgumentNotValid(ex, headers, status, request)
+    }
+
+    private val handler = TestableGlobalExceptionHandler()
     private val objectMapper = ObjectMapper().apply {
         registerModule(JavaTimeModule())
     }
@@ -27,19 +41,8 @@ class GlobalExceptionHandlerTest {
         }
     }
 
-    fun buildValidationResponse(
-        bindingResult: org.springframework.validation.BindingResult,
-        path: String
-    ): ErrorResponse {
-        val fieldErrors = bindingResult.fieldErrors.associate { error ->
-            error.field to (error.defaultMessage ?: "invalid")
-        }
-        return ErrorResponse(
-            error = "VALIDATION_ERROR",
-            message = "Request validation failed",
-            path = path,
-            details = fieldErrors
-        )
+    private fun ServletWebRequest(uri: String): ServletWebRequest {
+        return ServletWebRequest(mockRequest(uri))
     }
 
     @Nested
@@ -70,61 +73,96 @@ class GlobalExceptionHandlerTest {
 
             assertThat(response.body!!.message).contains("keycloak-abc-123")
         }
-
-        @Test
-        fun `should accept custom message via invoke operator`() {
-            val ex = UserNotFoundException("Custom error message")
-            val request = mockRequest()
-
-            val response = handler.handleUserNotFound(ex, request)
-
-            assertThat(response.body!!.message).isEqualTo("Custom error message")
-        }
     }
 
     @Nested
     inner class Validation {
 
+        private fun dummyMethod(): Method = GlobalExceptionHandlerTest::class.java.methods[0]
+
         @Test
         fun `should return 400 with field errors`() {
-            val bindingResult = BeanPropertyBindingResult("target", "target")
+            val bindingResult = BeanPropertyBindingResult(GlobalExceptionHandlerTest::class.java, "target")
             bindingResult.addError(
                 FieldError("target", "email", null, false, arrayOf("NotBlank"), emptyArray<Any>(), "must not be blank")
             )
             bindingResult.addError(
                 FieldError("target", "amount", null, false, arrayOf("Positive"), emptyArray<Any>(), "must be positive")
             )
+            val methodParameter = MethodParameter(dummyMethod(), -1)
+            val exception = MethodArgumentNotValidException(methodParameter, bindingResult)
+            val webRequest = ServletWebRequest("/api/v1/users/me")
 
-            val errorResponse = buildValidationResponse(bindingResult, "/api/v1/users/me")
+            val response = handler.invokeHandleMethodArgumentNotValid(
+                exception, HttpHeaders(), HttpStatus.BAD_REQUEST, webRequest
+            )
 
+            assertThat(response?.statusCode).isEqualTo(HttpStatus.BAD_REQUEST)
+            val errorResponse = response?.body as ErrorResponse
             assertThat(errorResponse.error).isEqualTo("VALIDATION_ERROR")
             assertThat(errorResponse.message).isEqualTo("Request validation failed")
             assertThat(errorResponse.path).isEqualTo("/api/v1/users/me")
             assertThat(errorResponse.details).isNotNull
-            assertThat(errorResponse.details!!).containsEntry("email", "must not be blank")
-            assertThat(errorResponse.details!!).containsEntry("amount", "must be positive")
+            assertThat(errorResponse.details!!["email"]).isEqualTo(listOf("must not be blank"))
+            assertThat(errorResponse.details!!["amount"]).isEqualTo(listOf("must be positive"))
         }
 
         @Test
         fun `should handle empty field errors gracefully`() {
-            val bindingResult = BeanPropertyBindingResult("target", "target")
+            val bindingResult = BeanPropertyBindingResult(GlobalExceptionHandlerTest::class.java, "target")
+            val methodParameter = MethodParameter(dummyMethod(), -1)
+            val exception = MethodArgumentNotValidException(methodParameter, bindingResult)
+            val webRequest = ServletWebRequest("/test")
 
-            val errorResponse = buildValidationResponse(bindingResult, "/test")
+            val response = handler.invokeHandleMethodArgumentNotValid(
+                exception, HttpHeaders(), HttpStatus.BAD_REQUEST, webRequest
+            )
 
+            assertThat(response?.statusCode).isEqualTo(HttpStatus.BAD_REQUEST)
+            val errorResponse = response?.body as ErrorResponse
             assertThat(errorResponse.details).isNotNull
             assertThat(errorResponse.details!!).isEmpty()
         }
 
         @Test
         fun `should use 'invalid' fallback when defaultMessage is null`() {
-            val bindingResult = BeanPropertyBindingResult("target", "target")
+            val bindingResult = BeanPropertyBindingResult(GlobalExceptionHandlerTest::class.java, "target")
             bindingResult.addError(
                 FieldError("target", "field", null, false, null, null, null)
             )
+            val methodParameter = MethodParameter(dummyMethod(), -1)
+            val exception = MethodArgumentNotValidException(methodParameter, bindingResult)
+            val webRequest = ServletWebRequest("/test")
 
-            val errorResponse = buildValidationResponse(bindingResult, "/test")
+            val response = handler.invokeHandleMethodArgumentNotValid(
+                exception, HttpHeaders(), HttpStatus.BAD_REQUEST, webRequest
+            )
 
-            assertThat(errorResponse.details!!).containsEntry("field", "invalid")
+            assertThat(response?.statusCode).isEqualTo(HttpStatus.BAD_REQUEST)
+            val errorResponse = response?.body as ErrorResponse
+            assertThat(errorResponse.details!!["field"]).isEqualTo(listOf("invalid"))
+        }
+
+        @Test
+        fun `should aggregate multiple errors for same field`() {
+            val bindingResult = BeanPropertyBindingResult(GlobalExceptionHandlerTest::class.java, "target")
+            bindingResult.addError(
+                FieldError("target", "email", null, false, arrayOf("NotBlank"), emptyArray<Any>(), "must not be blank")
+            )
+            bindingResult.addError(
+                FieldError("target", "email", null, false, arrayOf("Email"), emptyArray<Any>(), "must be a valid email")
+            )
+            val methodParameter = MethodParameter(dummyMethod(), -1)
+            val exception = MethodArgumentNotValidException(methodParameter, bindingResult)
+            val webRequest = ServletWebRequest("/api/v1/users")
+
+            val response = handler.invokeHandleMethodArgumentNotValid(
+                exception, HttpHeaders(), HttpStatus.BAD_REQUEST, webRequest
+            )
+
+            assertThat(response?.statusCode).isEqualTo(HttpStatus.BAD_REQUEST)
+            val errorResponse = response?.body as ErrorResponse
+            assertThat(errorResponse.details!!["email"]).isEqualTo(listOf("must not be blank", "must be a valid email"))
         }
     }
 
@@ -299,7 +337,7 @@ class GlobalExceptionHandlerTest {
 
         @Test
         fun `error response should not include null fields`() {
-            val ex = UserNotFoundException("test")
+            val ex = UserNotFoundException.byUserId(UUID.randomUUID())
             val request = mockRequest()
 
             val response = handler.handleUserNotFound(ex, request)
