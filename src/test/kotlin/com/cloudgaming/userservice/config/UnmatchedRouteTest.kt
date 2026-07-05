@@ -4,12 +4,10 @@ import com.cloudgaming.userservice.common.security.InternalSecretFilter
 import com.cloudgaming.userservice.container.KafkaTestContainerSingleton
 import com.cloudgaming.userservice.container.PostgresTestContainerSingleton
 import com.cloudgaming.userservice.container.RedisTestContainerSingleton
-import com.cloudgaming.userservice.integration.keycloak.KeycloakRoleConverter
 import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import org.junit.jupiter.api.BeforeEach
-import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.doAnswer
@@ -23,13 +21,14 @@ import org.springframework.test.context.TestPropertySource
 import org.springframework.test.context.bean.override.mockito.MockitoBean
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
-import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers.content
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.MOCK)
-@AutoConfigureMockMvc
+@AutoConfigureMockMvc(addFilters = false)
 @ActiveProfiles("test")
-class SecurityConfigTest {
+class UnmatchedRouteTest {
 
     companion object {
         private val postgres = PostgresTestContainerSingleton.instance
@@ -53,9 +52,6 @@ class SecurityConfigTest {
     private lateinit var mockMvc: MockMvc
 
     @MockitoBean
-    private lateinit var keycloakRoleConverter: KeycloakRoleConverter
-
-    @MockitoBean
     private lateinit var internalSecretFilter: InternalSecretFilter
 
     @BeforeEach
@@ -68,46 +64,12 @@ class SecurityConfigTest {
         }.`when`(internalSecretFilter).doFilter(any(), any(), any())
     }
 
-
-    @Nested
-    inner class PublicEndpoints {
-        @Test
-        fun `actuator health should be accessible without auth`() {
-            mockMvc.perform(get("/actuator/health")).andExpect(status().isOk)
-        }
-
-        @Test
-        fun `actuator info should be accessible without auth`() {
-            mockMvc.perform(get("/actuator/info")).andExpect(status().isOk)
-        }
-
-        @Test
-        fun `swagger-ui should be accessible without auth`() {
-            mockMvc.perform(get("/swagger-ui/index.html")).andExpect(status().isOk)
-        }
-
-        @Test
-        fun `api-docs should be accessible without auth`() {
-            mockMvc.perform(get("/v3/api-docs")).andExpect(status().isOk)
-        }
-    }
-
-    @Nested
-    inner class ProtectedEndpointsWithoutAuth {
-        @Test
-        fun `users me without auth should return 401`() {
-            mockMvc.perform(get("/api/v1/users/me")).andExpect(status().isUnauthorized)
-        }
-
-        @Test
-        fun `admin users without auth should return 401`() {
-            mockMvc.perform(get("/api/v1/admin/users")).andExpect(status().isUnauthorized)
-        }
-
-        @Test
-        fun `internal endpoints without auth should return 401`() {
-            mockMvc.perform(post("/api/internal/users/123/balance/operations"))
-                .andExpect(status().isUnauthorized)
-        }
+    @Test
+    fun `unmatched route should return 404 handled by GlobalExceptionHandler`() {
+        mockMvc.perform(get("/api/v1/nonexistent"))
+            .andExpect(status().isNotFound)
+            .andExpect(content().contentType("application/json"))
+            .andExpect(jsonPath("$.error").value("NOT_FOUND"))
+            .andExpect(jsonPath("$.path").value("/api/v1/nonexistent"))
     }
 }

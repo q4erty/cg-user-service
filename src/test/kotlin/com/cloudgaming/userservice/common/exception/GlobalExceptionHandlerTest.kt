@@ -15,6 +15,7 @@ import org.springframework.validation.BeanPropertyBindingResult
 import org.springframework.validation.FieldError
 import org.springframework.web.bind.MethodArgumentNotValidException
 import org.springframework.web.context.request.ServletWebRequest
+import org.springframework.web.servlet.NoHandlerFoundException
 import java.lang.reflect.Method
 import java.math.BigDecimal
 import java.util.*
@@ -28,6 +29,13 @@ class GlobalExceptionHandlerTest {
             status: HttpStatus,
             request: ServletWebRequest
         ) = handleMethodArgumentNotValid(ex, headers, status, request)
+
+        fun invokeHandleNoHandlerFoundException(
+            ex: NoHandlerFoundException,
+            headers: HttpHeaders,
+            status: HttpStatus,
+            request: ServletWebRequest
+        ) = handleNoHandlerFoundException(ex, headers, status, request)
     }
 
     private val handler = TestableGlobalExceptionHandler()
@@ -72,6 +80,27 @@ class GlobalExceptionHandlerTest {
             val response = handler.handleUserNotFound(ex, request)
 
             assertThat(response.body!!.message).contains("keycloak-abc-123")
+        }
+    }
+
+    @Nested
+    inner class NoHandlerFound {
+
+        @Test
+        fun `should return 404 for NoHandlerFoundException`() {
+            val ex = NoHandlerFoundException("GET", "/api/v1/nonexistent", HttpHeaders())
+            val webRequest = ServletWebRequest("/api/v1/nonexistent")
+
+            val response = handler.invokeHandleNoHandlerFoundException(
+                ex, HttpHeaders(), HttpStatus.NOT_FOUND, webRequest
+            )
+
+            assertThat(response?.statusCode).isEqualTo(HttpStatus.NOT_FOUND)
+            val errorResponse = response?.body as ErrorResponse
+            assertThat(errorResponse.error).isEqualTo("NOT_FOUND")
+            assertThat(errorResponse.message).contains("GET")
+            assertThat(errorResponse.message).contains("/api/v1/nonexistent")
+            assertThat(errorResponse.path).isEqualTo("/api/v1/nonexistent")
         }
     }
 

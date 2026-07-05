@@ -1,5 +1,8 @@
 package com.cloudgaming.userservice.common.exception
 
+import com.cloudgaming.userservice.constants.ErrorCode
+import com.cloudgaming.userservice.constants.ErrorDetailKey
+import com.cloudgaming.userservice.constants.RetryAfterSeconds
 import jakarta.servlet.http.HttpServletRequest
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpHeaders
@@ -17,25 +20,14 @@ import org.springframework.web.bind.annotation.RestControllerAdvice
 import org.springframework.web.context.request.WebRequest
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler
 import org.springframework.web.servlet.NoHandlerFoundException
+import org.springframework.http.converter.HttpMessageNotReadableException
 import java.util.*
 
-/**
- * - UserNotFound → 404
- * - Validation → 400
- * - AccessDenied → 403
- * - InsufficientFunds → 409
- * - IdempotencyConflict → 409
- * - ConcurrentBalanceOperation → 503 с Retry-After
- * - RoleNotFound → 400
- * - KeycloakApi → 503
- * - RuntimeException → 500 (catch-all)
- */
 @RestControllerAdvice
 class GlobalExceptionHandler : ResponseEntityExceptionHandler() {
 
     private val logger = LoggerFactory.getLogger(javaClass)
 
-    // 404 Not Found
     @ExceptionHandler(UserNotFoundException::class)
     fun handleUserNotFound(
         ex: UserNotFoundException,
@@ -44,14 +36,13 @@ class GlobalExceptionHandler : ResponseEntityExceptionHandler() {
         logger.warn("User not found: {}", ex.message)
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(
             ErrorResponse(
-                error = "USER_NOT_FOUND",
-                message = ex.message ?: "User not found",
+                error = ErrorCode.USER_NOT_FOUND.code,
+                message = ex.message ?: ErrorCode.USER_NOT_FOUND.defaultMessage,
                 path = request.requestURI
             )
         )
     }
 
-    // 400 Bad Request: Validation
     override fun handleMethodArgumentNotValid(
         ex: MethodArgumentNotValidException,
         headers: HttpHeaders,
@@ -64,8 +55,8 @@ class GlobalExceptionHandler : ResponseEntityExceptionHandler() {
         logger.warn("Validation failed: {}", fieldErrors)
 
         val errorResponse = ErrorResponse(
-            error = "VALIDATION_ERROR",
-            message = "Request validation failed",
+            error = ErrorCode.VALIDATION_ERROR.code,
+            message = ErrorCode.VALIDATION_ERROR.defaultMessage,
             path = (request.getDescription(false).removePrefix("uri=")),
             details = fieldErrors
         )
@@ -80,7 +71,7 @@ class GlobalExceptionHandler : ResponseEntityExceptionHandler() {
         request: WebRequest
     ): ResponseEntity<Any>? {
         return createErrorResponse(
-            error = "METHOD_NOT_ALLOWED",
+            error = ErrorCode.METHOD_NOT_ALLOWED.code,
             message = "Request method '${ex.method}' not supported",
             status = HttpStatus.METHOD_NOT_ALLOWED,
             request = request,
@@ -95,7 +86,7 @@ class GlobalExceptionHandler : ResponseEntityExceptionHandler() {
         request: WebRequest
     ): ResponseEntity<Any>? {
         return createErrorResponse(
-            error = "UNSUPPORTED_MEDIA_TYPE",
+            error = ErrorCode.UNSUPPORTED_MEDIA_TYPE.code,
             message = "Content type '${ex.contentType}' not supported",
             status = HttpStatus.UNSUPPORTED_MEDIA_TYPE,
             request = request,
@@ -110,8 +101,23 @@ class GlobalExceptionHandler : ResponseEntityExceptionHandler() {
         request: WebRequest
     ): ResponseEntity<Any>? {
         return createErrorResponse(
-            error = "MISSING_PARAMETER",
+            error = ErrorCode.MISSING_PARAMETER.code,
             message = "Missing required parameter: ${ex.parameterName}",
+            status = HttpStatus.BAD_REQUEST,
+            request = request
+        )
+    }
+
+    override fun handleHttpMessageNotReadable(
+        ex: HttpMessageNotReadableException,
+        headers: HttpHeaders,
+        status: HttpStatusCode,
+        request: WebRequest
+    ): ResponseEntity<Any>? {
+        logger.warn("Malformed JSON request: {}", ex.message)
+        return createErrorResponse(
+            error = ErrorCode.MALFORMED_JSON.code,
+            message = ErrorCode.MALFORMED_JSON.defaultMessage,
             status = HttpStatus.BAD_REQUEST,
             request = request
         )
@@ -124,11 +130,36 @@ class GlobalExceptionHandler : ResponseEntityExceptionHandler() {
         request: WebRequest
     ): ResponseEntity<Any>? {
         return createErrorResponse(
-            error = "NOT_FOUND",
+            error = ErrorCode.NOT_FOUND.code,
             message = "No endpoint found for ${ex.httpMethod} ${ex.requestURL}",
             status = HttpStatus.NOT_FOUND,
             request = request
         )
+    }
+
+    override fun handleExceptionInternal(
+        ex: Exception,
+        body: Any?,
+        headers: HttpHeaders,
+        status: HttpStatusCode,
+        request: WebRequest
+    ): ResponseEntity<Any> {
+        if (body is ErrorResponse) {
+            return ResponseEntity.status(status).headers(headers).body(body)
+        }
+
+        val message = when (body) {
+            is String -> body
+            else -> ex.message ?: "Unexpected error"
+        }
+
+        val errorResponse = ErrorResponse(
+            error = status.toString(),
+            message = message,
+            path = request.getDescription(false).removePrefix("uri=")
+        )
+
+        return ResponseEntity.status(status).headers(headers).body(errorResponse)
     }
 
     private fun createErrorResponse(
@@ -146,7 +177,6 @@ class GlobalExceptionHandler : ResponseEntityExceptionHandler() {
         return ResponseEntity.status(status).headers(headers ?: HttpHeaders()).body(errorResponse)
     }
 
-    // 400 Bad Request: Role not found
     @ExceptionHandler(RoleNotFoundException::class)
     fun handleRoleNotFound(
         ex: RoleNotFoundException,
@@ -155,14 +185,13 @@ class GlobalExceptionHandler : ResponseEntityExceptionHandler() {
         logger.warn("Role not found: {}", ex.message)
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(
             ErrorResponse(
-                error = "ROLE_NOT_FOUND",
-                message = ex.message ?: "Role not found",
+                error = ErrorCode.ROLE_NOT_FOUND.code,
+                message = ex.message ?: ErrorCode.ROLE_NOT_FOUND.defaultMessage,
                 path = request.requestURI
             )
         )
     }
 
-    // 403 Forbidden
     @ExceptionHandler(AccessDeniedException::class)
     fun handleAccessDenied(
         ex: AccessDeniedException,
@@ -171,14 +200,13 @@ class GlobalExceptionHandler : ResponseEntityExceptionHandler() {
         logger.warn("Access denied: {}", ex.message)
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(
             ErrorResponse(
-                error = "ACCESS_DENIED",
-                message = "You don't have permission to access this resource",
+                error = ErrorCode.ACCESS_DENIED.code,
+                message = ErrorCode.ACCESS_DENIED.defaultMessage,
                 path = request.requestURI
             )
         )
     }
 
-    // 403 Forbidden
     @ExceptionHandler(AuthenticationException::class)
     fun handleAuthentication(
         ex: AuthenticationException,
@@ -187,14 +215,13 @@ class GlobalExceptionHandler : ResponseEntityExceptionHandler() {
         logger.warn("Authentication failed: {}", ex.message)
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(
             ErrorResponse(
-                error = "UNAUTHORIZED",
-                message = "Authentication required or token invalid",
+                error = ErrorCode.UNAUTHORIZED.code,
+                message = ErrorCode.UNAUTHORIZED.defaultMessage,
                 path = request.requestURI
             )
         )
     }
 
-    // 409 Conflict: Insufficient funds
     @ExceptionHandler(InsufficientFundsException::class)
     fun handleInsufficientFunds(
         ex: InsufficientFundsException,
@@ -205,19 +232,18 @@ class GlobalExceptionHandler : ResponseEntityExceptionHandler() {
 
         return ResponseEntity.status(HttpStatus.CONFLICT).body(
             ErrorResponse(
-                error = "INSUFFICIENT_FUNDS",
-                message = ex.message ?: "Insufficient funds",
+                error = ErrorCode.INSUFFICIENT_FUNDS.code,
+                message = ex.message ?: ErrorCode.INSUFFICIENT_FUNDS.defaultMessage,
                 path = request.requestURI,
                 details = mapOf(
-                    "user_id" to ex.userId.toString(),
-                    "current_balance" to ex.currentBalance.toString(),
-                    "requested_amount" to ex.requestedAmount.toString()
+                    ErrorDetailKey.USER_ID to ex.userId.toString(),
+                    ErrorDetailKey.CURRENT_BALANCE to ex.currentBalance.toString(),
+                    ErrorDetailKey.REQUESTED_AMOUNT to ex.requestedAmount.toString()
                 )
             )
         )
     }
 
-    // 409 Conflict: Idempotency
     @ExceptionHandler(IdempotencyConflictException::class)
     fun handleIdempotencyConflict(
         ex: IdempotencyConflictException,
@@ -228,18 +254,17 @@ class GlobalExceptionHandler : ResponseEntityExceptionHandler() {
 
         return ResponseEntity.status(HttpStatus.CONFLICT).body(
             ErrorResponse(
-                error = "IDEMPOTENCY_CONFLICT",
-                message = ex.message ?: "Idempotency conflict",
+                error = ErrorCode.IDEMPOTENCY_CONFLICT.code,
+                message = ex.message ?: ErrorCode.IDEMPOTENCY_CONFLICT.defaultMessage,
                 path = request.requestURI,
                 details = mapOf(
-                    "idempotency_key" to ex.idempotencyKey,
-                    "previous_transaction_id" to ex.previousTransactionId.toString()
+                    ErrorDetailKey.IDEMPOTENCY_KEY to ex.idempotencyKey,
+                    ErrorDetailKey.PREVIOUS_TRANSACTION_ID to ex.previousTransactionId.toString()
                 )
             )
         )
     }
 
-    // 503 Service Unavailable: Concurrent
     @ExceptionHandler(ConcurrentBalanceOperationException::class)
     fun handleConcurrentBalanceOperation(
         ex: ConcurrentBalanceOperationException,
@@ -248,7 +273,7 @@ class GlobalExceptionHandler : ResponseEntityExceptionHandler() {
         logger.warn("Concurrent balance operation for user {}: {}", ex.userId, ex.message)
 
         val headers = HttpHeaders().apply {
-            add("Retry-After", "5")
+            add(HttpHeaders.RETRY_AFTER, RetryAfterSeconds.CONCURRENT_OPERATION)
         }
 
         return ResponseEntity
@@ -256,15 +281,14 @@ class GlobalExceptionHandler : ResponseEntityExceptionHandler() {
             .headers(headers)
             .body(
                 ErrorResponse(
-                    error = "CONCURRENT_OPERATION",
-                    message = ex.message ?: "Concurrent operation in progress, retry later",
+                    error = ErrorCode.CONCURRENT_OPERATION.code,
+                    message = ex.message ?: ErrorCode.CONCURRENT_OPERATION.defaultMessage,
                     path = request.requestURI,
-                    details = mapOf("user_id" to ex.userId.toString())
+                    details = mapOf(ErrorDetailKey.USER_ID to ex.userId.toString())
                 )
             )
     }
 
-    // 503 Service Unavailable: Keycloak
     @ExceptionHandler(KeycloakApiException::class)
     fun handleKeycloakApi(
         ex: KeycloakApiException,
@@ -273,7 +297,7 @@ class GlobalExceptionHandler : ResponseEntityExceptionHandler() {
         logger.error("Keycloak API error: {}", ex.message, ex)
 
         val headers = HttpHeaders().apply {
-            add("Retry-After", "30")
+            add(HttpHeaders.RETRY_AFTER, RetryAfterSeconds.KEYCLOAK_UNAVAILABLE)
         }
 
         return ResponseEntity
@@ -281,14 +305,13 @@ class GlobalExceptionHandler : ResponseEntityExceptionHandler() {
             .headers(headers)
             .body(
                 ErrorResponse(
-                    error = "KEYCLOAK_UNAVAILABLE",
-                    message = "Identity provider is temporarily unavailable",
+                    error = ErrorCode.KEYCLOAK_UNAVAILABLE.code,
+                    message = ErrorCode.KEYCLOAK_UNAVAILABLE.defaultMessage,
                     path = request.requestURI
                 )
             )
     }
 
-    // 500 Internal Server Error (catch-all)
     @ExceptionHandler(Exception::class)
     fun handleGenericException(
         ex: Exception,
@@ -299,10 +322,10 @@ class GlobalExceptionHandler : ResponseEntityExceptionHandler() {
 
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(
             ErrorResponse(
-                error = "INTERNAL_ERROR",
-                message = "An unexpected error occurred. Reference ID: $errorId",
+                error = ErrorCode.INTERNAL_ERROR.code,
+                message = "${ErrorCode.INTERNAL_ERROR.defaultMessage}. Reference ID: $errorId",
                 path = request.requestURI,
-                details = mapOf("error_id" to errorId.toString())
+                details = mapOf(ErrorDetailKey.ERROR_ID to errorId.toString())
             )
         )
     }
