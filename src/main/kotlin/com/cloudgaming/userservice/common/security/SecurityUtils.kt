@@ -6,6 +6,7 @@ import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.security.oauth2.jwt.Jwt
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken
 import org.springframework.stereotype.Component
+import java.util.UUID
 
 @Component
 class SecurityUtils {
@@ -13,6 +14,11 @@ class SecurityUtils {
     fun getCurrentKeycloakId(): String {
         val jwt = getCurrentJwt()
         return jwt.subject ?: throw IllegalStateException("JWT subject (keycloak_id) is null")
+    }
+
+    fun getCurrentUserId(): UUID {
+        val keycloakId = getCurrentKeycloakId()
+        return UUID.fromString(keycloakId)
     }
 
     fun getCurrentEmail(): String? = getCurrentJwt().claims[JwtClaim.EMAIL.claimName] as? String

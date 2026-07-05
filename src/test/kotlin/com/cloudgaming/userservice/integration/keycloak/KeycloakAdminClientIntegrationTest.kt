@@ -1,7 +1,7 @@
 package com.cloudgaming.userservice.integration.keycloak
 
 import com.cloudgaming.userservice.container.KeycloakTestContainerSingleton
-import com.cloudgaming.userservice.exception.RoleNotFoundException
+import com.cloudgaming.userservice.common.exception.RoleNotFoundException
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.BeforeAll

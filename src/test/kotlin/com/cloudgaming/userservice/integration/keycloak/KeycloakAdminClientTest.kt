@@ -1,7 +1,8 @@
 package com.cloudgaming.userservice.integration.keycloak
 
-import com.cloudgaming.userservice.exception.KeycloakApiException
-import com.cloudgaming.userservice.exception.RoleNotFoundException
+import com.cloudgaming.userservice.common.exception.KeycloakApiException
+import com.cloudgaming.userservice.common.exception.RoleNotFoundException
+import com.cloudgaming.userservice.common.exception.UserNotFoundException
 import jakarta.ws.rs.NotFoundException
 import jakarta.ws.rs.WebApplicationException
 import org.assertj.core.api.Assertions.assertThat
@@ -79,6 +80,23 @@ class KeycloakAdminClientUnitTest {
                 adminClient.assignRole(keycloakUserId, "PLAYER")
             }.isInstanceOf(KeycloakApiException::class.java)
         }
+
+        @Test
+        fun `should throw UserNotFoundException when user does not exist`() {
+            val keycloakUserId = UUID.randomUUID().toString()
+            val roleRep = RoleRepresentation().apply { name = "PLAYER" }
+
+            whenever(rolesResource.get("PLAYER")).thenReturn(roleResource)
+            whenever(roleResource.toRepresentation()).thenReturn(roleRep)
+            whenever(usersResource.get(keycloakUserId)).thenReturn(userResource)
+            whenever(userResource.roles()).thenReturn(roleMappingResourceBuilder)
+            whenever(roleMappingResourceBuilder.realmLevel()).thenReturn(roleMappingResource)
+            whenever(roleMappingResource.add(listOf(roleRep))).thenThrow(NotFoundException("Not found"))
+
+            assertThatThrownBy {
+                adminClient.assignRole(keycloakUserId, "PLAYER")
+            }.isInstanceOf(UserNotFoundException::class.java)
+        }
     }
 
     @Nested
@@ -98,6 +116,23 @@ class KeycloakAdminClientUnitTest {
             adminClient.removeRole(keycloakUserId, "PREMIUM")
 
             verify(roleMappingResource).remove(listOf(roleRep))
+        }
+
+        @Test
+        fun `should throw UserNotFoundException when user does not exist`() {
+            val keycloakUserId = UUID.randomUUID().toString()
+            val roleRep = RoleRepresentation().apply { name = "PREMIUM" }
+
+            whenever(rolesResource.get("PREMIUM")).thenReturn(roleResource)
+            whenever(roleResource.toRepresentation()).thenReturn(roleRep)
+            whenever(usersResource.get(keycloakUserId)).thenReturn(userResource)
+            whenever(userResource.roles()).thenReturn(roleMappingResourceBuilder)
+            whenever(roleMappingResourceBuilder.realmLevel()).thenReturn(roleMappingResource)
+            whenever(roleMappingResource.remove(listOf(roleRep))).thenThrow(NotFoundException("Not found"))
+
+            assertThatThrownBy {
+                adminClient.removeRole(keycloakUserId, "PREMIUM")
+            }.isInstanceOf(UserNotFoundException::class.java)
         }
     }
 
@@ -133,6 +168,19 @@ class KeycloakAdminClientUnitTest {
             assertThatThrownBy {
                 adminClient.getUserRoles(keycloakUserId)
             }.isInstanceOf(KeycloakApiException::class.java)
+        }
+
+        @Test
+        fun `should throw UserNotFoundException when user does not exist`() {
+            val keycloakUserId = UUID.randomUUID().toString()
+            whenever(usersResource.get(keycloakUserId)).thenReturn(userResource)
+            whenever(userResource.roles()).thenReturn(roleMappingResourceBuilder)
+            whenever(roleMappingResourceBuilder.realmLevel()).thenReturn(roleMappingResource)
+            whenever(roleMappingResource.listAll()).thenThrow(NotFoundException("Not found"))
+
+            assertThatThrownBy {
+                adminClient.getUserRoles(keycloakUserId)
+            }.isInstanceOf(UserNotFoundException::class.java)
         }
     }
 
