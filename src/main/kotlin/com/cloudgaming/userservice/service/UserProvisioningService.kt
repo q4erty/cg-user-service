@@ -73,7 +73,7 @@ class UserProvisioningService(
     }
 
     @Transactional
-    fun validateUserExists(keycloakId: String, email: String?) {
+    fun validateUserExists(keycloakId: String, email: String?, displayName: String?) {
         val existsKey = "${RedisKey.EXISTS_PREFIX}$keycloakId"
         if (redisTemplate.hasKey(existsKey)) {
             logger.debug("Fast path (validate): user {} exists in Redis cache", keycloakId)
@@ -81,7 +81,7 @@ class UserProvisioningService(
             return
         }
 
-        ensureUserExists(keycloakId, email, null)
+        ensureUserExists(keycloakId, email, displayName)
     }
 
     fun getInternalUserId(keycloakId: String): UUID? {

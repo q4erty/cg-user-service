@@ -37,7 +37,7 @@ class UserProvisioningFilter(
                     val email = jwt.claims[JwtClaim.EMAIL.claimName] as? String
                     val displayName = jwt.claims[JwtClaim.PREFERRED_USERNAME.claimName] as? String
 
-                    provisioningService.validateUserExists(keycloakId, email)
+                    provisioningService.validateUserExists(keycloakId, email, displayName)
                 }
             } catch (e: Exception) {
                 logger.error(
