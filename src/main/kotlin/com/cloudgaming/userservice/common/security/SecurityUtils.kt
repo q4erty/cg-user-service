@@ -2,14 +2,17 @@ package com.cloudgaming.userservice.common.security
 
 import com.cloudgaming.userservice.constants.JwtClaim
 import com.cloudgaming.userservice.constants.Role
+import com.cloudgaming.userservice.service.UserProvisioningService
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.security.oauth2.jwt.Jwt
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken
 import org.springframework.stereotype.Component
-import java.util.UUID
+import java.util.*
 
 @Component
-class SecurityUtils {
+class SecurityUtils(
+    private val userProvisioningService: UserProvisioningService
+) {
 
     fun getCurrentKeycloakId(): String {
         val jwt = getCurrentJwt()
@@ -18,7 +21,7 @@ class SecurityUtils {
 
     fun getCurrentUserId(): UUID {
         val keycloakId = getCurrentKeycloakId()
-        return UUID.fromString(keycloakId)
+        return userProvisioningService.requireInternalUserId(keycloakId)
     }
 
     fun getCurrentEmail(): String? = getCurrentJwt().claims[JwtClaim.EMAIL.claimName] as? String

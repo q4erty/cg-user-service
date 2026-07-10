@@ -4,6 +4,7 @@ import com.cloudgaming.userservice.common.security.InternalSecretFilter
 import com.cloudgaming.userservice.container.KafkaTestContainerSingleton
 import com.cloudgaming.userservice.container.PostgresTestContainerSingleton
 import com.cloudgaming.userservice.container.RedisTestContainerSingleton
+import com.cloudgaming.userservice.dto.UserEventProducer
 import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
@@ -17,13 +18,10 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
-import org.springframework.test.context.TestPropertySource
 import org.springframework.test.context.bean.override.mockito.MockitoBean
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
-import org.springframework.test.web.servlet.result.MockMvcResultMatchers.content
-import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
-import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers.*
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 @AutoConfigureMockMvc(addFilters = false)
@@ -53,6 +51,9 @@ class UnmatchedRouteTest {
 
     @MockitoBean
     private lateinit var internalSecretFilter: InternalSecretFilter
+
+    @MockitoBean
+    private lateinit var userEventProducer: UserEventProducer
 
     @BeforeEach
     fun setUp() {

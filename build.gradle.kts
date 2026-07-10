@@ -97,6 +97,7 @@ kover {
                 packages("com.cloudgaming.userservice.domain")
                 packages("com.cloudgaming.userservice.config")
                 packages("com.cloudgaming.userservice.constants")
+                packages("com.cloudgaming.userservice.dto")
                 classes("com.cloudgaming.userservice.UserServiceApplicationKt")
             }
         }
