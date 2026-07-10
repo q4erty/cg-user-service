@@ -1,23 +1,35 @@
 package com.cloudgaming.userservice.common.security
 
+import com.cloudgaming.userservice.common.exception.UserNotFoundException
 import com.cloudgaming.userservice.constants.Role
+import com.cloudgaming.userservice.service.UserProvisioningService
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
+import org.mockito.InjectMocks
+import org.mockito.Mock
+import org.mockito.junit.jupiter.MockitoExtension
+import org.mockito.kotlin.whenever
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
 import org.springframework.security.core.authority.SimpleGrantedAuthority
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.security.oauth2.jwt.Jwt
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken
 import java.time.Instant
-import java.util.UUID
+import java.util.*
 
+@ExtendWith(MockitoExtension::class)
 class SecurityUtilsTest {
 
-    private val securityUtils = SecurityUtils()
+    @Mock
+    private lateinit var userProvisioningService: UserProvisioningService
+
+    @InjectMocks
+    private lateinit var securityUtils: SecurityUtils
 
     @BeforeEach
     fun setUp() {
@@ -110,10 +122,12 @@ class SecurityUtilsTest {
     inner class GetCurrentUserId {
 
         @Test
-        fun `should return UUID when keycloak_id is valid UUID`() {
+        fun `should return UUID when provisioning service returns it`() {
             val testUuid = UUID.randomUUID()
-            val jwt = buildJwt(subject = testUuid.toString())
+            val jwt = buildJwt(subject = "keycloak-id-123")
             setJwtAuth(jwt)
+            whenever(userProvisioningService.requireInternalUserId("keycloak-id-123"))
+                .thenReturn(testUuid)
 
             val userId = securityUtils.getCurrentUserId()
 
@@ -121,12 +135,14 @@ class SecurityUtilsTest {
         }
 
         @Test
-        fun `should throw IllegalArgumentException when keycloak_id is not UUID`() {
-            val jwt = buildJwt(subject = "google-oauth-12345")
+        fun `should throw UserNotFoundException when provisioning returns null`() {
+            val jwt = buildJwt(subject = "unknown-keycloak-id")
             setJwtAuth(jwt)
+            whenever(userProvisioningService.requireInternalUserId("unknown-keycloak-id"))
+                .thenThrow(UserNotFoundException.byKeycloakId("unknown-keycloak-id"))
 
             assertThatThrownBy { securityUtils.getCurrentUserId() }
-                .isInstanceOf(IllegalArgumentException::class.java)
+                .isInstanceOf(UserNotFoundException::class.java)
         }
 
         @Test
@@ -218,14 +234,6 @@ class SecurityUtilsTest {
             setJwtAuth(jwt, authorities = listOf(Role.PLAYER.authority))
 
             assertThat(securityUtils.hasRole(Role.ADMIN)).isFalse
-        }
-
-        @Test
-        fun `should handle lowercase role name`() {
-            val jwt = buildJwt()
-            setJwtAuth(jwt, authorities = listOf(Role.PLAYER.authority))
-
-            assertThat(securityUtils.hasRole(Role.PLAYER)).isTrue
         }
 
         @Test

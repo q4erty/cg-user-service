@@ -17,7 +17,7 @@ class UserBalance(
     @OneToOne(fetch = FetchType.LAZY)
     @MapsId
     @JoinColumn(name = "user_id")
-    val user: User? = null,
+    var user: User? = null,
 
     @Column(name = "amount", nullable = false, precision = 15, scale = 2)
     var amount: BigDecimal = BigDecimal.ZERO,

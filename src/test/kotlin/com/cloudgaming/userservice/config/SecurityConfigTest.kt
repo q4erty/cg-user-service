@@ -4,6 +4,7 @@ import com.cloudgaming.userservice.common.security.InternalSecretFilter
 import com.cloudgaming.userservice.container.KafkaTestContainerSingleton
 import com.cloudgaming.userservice.container.PostgresTestContainerSingleton
 import com.cloudgaming.userservice.container.RedisTestContainerSingleton
+import com.cloudgaming.userservice.dto.UserEventProducer
 import com.cloudgaming.userservice.integration.keycloak.KeycloakRoleConverter
 import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest
@@ -19,7 +20,6 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
-import org.springframework.test.context.TestPropertySource
 import org.springframework.test.context.bean.override.mockito.MockitoBean
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
@@ -57,6 +57,9 @@ class SecurityConfigTest {
 
     @MockitoBean
     private lateinit var internalSecretFilter: InternalSecretFilter
+
+    @MockitoBean
+    private lateinit var userEventProducer: UserEventProducer
 
     @BeforeEach
     fun setUp() {

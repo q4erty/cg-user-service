@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test
 import org.springframework.core.MethodParameter
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
+import org.springframework.http.MediaType
 import org.springframework.mock.web.MockHttpServletRequest
 import org.springframework.security.access.AccessDeniedException
 import org.springframework.security.core.AuthenticationException
@@ -16,9 +17,16 @@ import org.springframework.validation.FieldError
 import org.springframework.web.bind.MethodArgumentNotValidException
 import org.springframework.web.context.request.ServletWebRequest
 import org.springframework.web.servlet.NoHandlerFoundException
+import org.springframework.web.HttpMediaTypeNotSupportedException
+import org.springframework.web.HttpRequestMethodNotSupportedException
+import org.springframework.web.bind.MissingServletRequestParameterException
+import org.springframework.http.converter.HttpMessageNotReadableException
+import org.springframework.http.HttpInputMessage
+import org.mockito.kotlin.mock
 import java.lang.reflect.Method
 import java.math.BigDecimal
 import java.util.*
+import java.util.Collections.singletonList
 
 class GlobalExceptionHandlerTest {
 
@@ -36,6 +44,42 @@ class GlobalExceptionHandlerTest {
             status: HttpStatus,
             request: ServletWebRequest
         ) = handleNoHandlerFoundException(ex, headers, status, request)
+
+        fun invokeHandleHttpRequestMethodNotSupported(
+            ex: HttpRequestMethodNotSupportedException,
+            headers: HttpHeaders,
+            status: HttpStatus,
+            request: ServletWebRequest
+        ) = handleHttpRequestMethodNotSupported(ex, headers, status, request)
+
+        fun invokeHandleHttpMediaTypeNotSupported(
+            ex: HttpMediaTypeNotSupportedException,
+            headers: HttpHeaders,
+            status: HttpStatus,
+            request: ServletWebRequest
+        ) = handleHttpMediaTypeNotSupported(ex, headers, status, request)
+
+        fun invokeHandleMissingServletRequestParameter(
+            ex: MissingServletRequestParameterException,
+            headers: HttpHeaders,
+            status: HttpStatus,
+            request: ServletWebRequest
+        ) = handleMissingServletRequestParameter(ex, headers, status, request)
+
+        fun invokeHandleHttpMessageNotReadable(
+            ex: HttpMessageNotReadableException,
+            headers: HttpHeaders,
+            status: HttpStatus,
+            request: ServletWebRequest
+        ) = handleHttpMessageNotReadable(ex, headers, status, request)
+
+        fun invokeHandleExceptionInternal(
+            ex: Exception,
+            body: Any?,
+            headers: HttpHeaders,
+            status: HttpStatus,
+            request: ServletWebRequest
+        ) = handleExceptionInternal(ex, body, headers, status, request)
     }
 
     private val handler = TestableGlobalExceptionHandler()
@@ -349,6 +393,88 @@ class GlobalExceptionHandlerTest {
     }
 
     @Nested
+    inner class MethodNotSupported {
+
+        @Test
+        fun `should return 405 for HttpRequestMethodNotSupportedException`() {
+            val ex = HttpRequestMethodNotSupportedException("DELETE")
+            val webRequest = ServletWebRequest("/api/v1/users/123")
+
+            val response = handler.invokeHandleHttpRequestMethodNotSupported(
+                ex, HttpHeaders(), HttpStatus.METHOD_NOT_ALLOWED, webRequest
+            )
+
+            assertThat(response?.statusCode).isEqualTo(HttpStatus.METHOD_NOT_ALLOWED)
+            val errorResponse = response?.body as ErrorResponse
+            assertThat(errorResponse.error).isEqualTo("METHOD_NOT_ALLOWED")
+            assertThat(errorResponse.message).contains("DELETE")
+            assertThat(errorResponse.path).isEqualTo("/api/v1/users/123")
+        }
+    }
+
+    @Nested
+    inner class MediaTypeNotSupported {
+
+        @Test
+        fun `should return 415 for HttpMediaTypeNotSupportedException`() {
+            val mediaType = MediaType.parseMediaType("application/xml")
+            val ex = HttpMediaTypeNotSupportedException(mediaType, singletonList(mediaType))
+            val webRequest = ServletWebRequest("/api/v1/users")
+
+            val response = handler.invokeHandleHttpMediaTypeNotSupported(
+                ex, HttpHeaders(), HttpStatus.UNSUPPORTED_MEDIA_TYPE, webRequest
+            )
+
+            assertThat(response?.statusCode).isEqualTo(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
+            val errorResponse = response?.body as ErrorResponse
+            assertThat(errorResponse.error).isEqualTo("UNSUPPORTED_MEDIA_TYPE")
+            assertThat(errorResponse.message).contains("application/xml")
+            assertThat(errorResponse.path).isEqualTo("/api/v1/users")
+        }
+    }
+
+    @Nested
+    inner class MissingParameter {
+
+        @Test
+        fun `should return 400 for MissingServletRequestParameterException`() {
+            val ex = MissingServletRequestParameterException("userId", "UUID")
+            val webRequest = ServletWebRequest("/api/v1/users")
+
+            val response = handler.invokeHandleMissingServletRequestParameter(
+                ex, HttpHeaders(), HttpStatus.BAD_REQUEST, webRequest
+            )
+
+            assertThat(response?.statusCode).isEqualTo(HttpStatus.BAD_REQUEST)
+            val errorResponse = response?.body as ErrorResponse
+            assertThat(errorResponse.error).isEqualTo("MISSING_PARAMETER")
+            assertThat(errorResponse.message).contains("userId")
+            assertThat(errorResponse.path).isEqualTo("/api/v1/users")
+        }
+    }
+
+    @Nested
+    inner class MalformedJson {
+
+        @Test
+        fun `should return 400 for HttpMessageNotReadableException`() {
+            val httpInputMessage = mock<HttpInputMessage>()
+            val ex = HttpMessageNotReadableException("Could not read JSON: malformed input", null, httpInputMessage)
+            val webRequest = ServletWebRequest("/api/v1/users/me")
+
+            val response = handler.invokeHandleHttpMessageNotReadable(
+                ex, HttpHeaders(), HttpStatus.BAD_REQUEST, webRequest
+            )
+
+            assertThat(response?.statusCode).isEqualTo(HttpStatus.BAD_REQUEST)
+            val errorResponse = response?.body as ErrorResponse
+            assertThat(errorResponse.error).isEqualTo("MALFORMED_JSON")
+            assertThat(errorResponse.message).isEqualTo("Malformed JSON request")
+            assertThat(errorResponse.path).isEqualTo("/api/v1/users/me")
+        }
+    }
+
+    @Nested
     inner class ErrorResponseFormat {
 
         @Test
@@ -373,6 +499,74 @@ class GlobalExceptionHandlerTest {
             val json = objectMapper.writeValueAsString(response.body)
 
             assertThat(json).doesNotContain("\"details\"")
+        }
+    }
+
+    @Nested
+    inner class ExceptionInternal {
+
+        @Test
+        fun `should return response with existing ErrorResponse body`() {
+            val ex = RuntimeException("Something went wrong")
+            val errorResponse = ErrorResponse(
+                error = "CUSTOM_ERROR",
+                message = "Custom message",
+                path = "/api/v1/test"
+            )
+            val webRequest = ServletWebRequest("/api/v1/test")
+
+            val response = handler.invokeHandleExceptionInternal(
+                ex, errorResponse, HttpHeaders(), HttpStatus.BAD_REQUEST, webRequest
+            )
+
+            assertThat(response.statusCode).isEqualTo(HttpStatus.BAD_REQUEST)
+            assertThat(response.body).isEqualTo(errorResponse)
+        }
+
+        @Test
+        fun `should wrap string body in ErrorResponse`() {
+            val ex = RuntimeException()
+            val webRequest = ServletWebRequest("/api/v1/test")
+
+            val response = handler.invokeHandleExceptionInternal(
+                ex, "Simple error message", HttpHeaders(), HttpStatus.BAD_REQUEST, webRequest
+            )
+
+            assertThat(response.statusCode).isEqualTo(HttpStatus.BAD_REQUEST)
+            assertThat(response.body).isInstanceOf(ErrorResponse::class.java)
+            val body = response.body as ErrorResponse
+            assertThat(body.message).isEqualTo("Simple error message")
+            assertThat(body.path).isEqualTo("/api/v1/test")
+        }
+
+        @Test
+        fun `should use exception message when body is not string or ErrorResponse`() {
+            val ex = RuntimeException("Exception message here")
+            val webRequest = ServletWebRequest("/api/v1/test")
+
+            val response = handler.invokeHandleExceptionInternal(
+                ex, null, HttpHeaders(), HttpStatus.INTERNAL_SERVER_ERROR, webRequest
+            )
+
+            assertThat(response.statusCode).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR)
+            assertThat(response.body).isInstanceOf(ErrorResponse::class.java)
+            val body = response.body as ErrorResponse
+            assertThat(body.message).isEqualTo("Exception message here")
+        }
+
+        @Test
+        fun `should use default message when exception has no message`() {
+            val ex = RuntimeException()
+            val webRequest = ServletWebRequest("/api/v1/test")
+
+            val response = handler.invokeHandleExceptionInternal(
+                ex, null, HttpHeaders(), HttpStatus.INTERNAL_SERVER_ERROR, webRequest
+            )
+
+            assertThat(response.statusCode).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR)
+            assertThat(response.body).isInstanceOf(ErrorResponse::class.java)
+            val body = response.body as ErrorResponse
+            assertThat(body.message).isEqualTo("Unexpected error")
         }
     }
 }

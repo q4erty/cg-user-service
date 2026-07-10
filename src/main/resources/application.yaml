@@ -112,6 +112,10 @@ app:
     user-profile-ttl: 5m
     user-exists-ttl: 24h
 
+  kafka:
+    topics:
+      user-events: ${KAFKA_TOPIC_USER_EVENTS:user-events}
+
 resilience4j:
   retry:
     instances:

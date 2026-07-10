@@ -4,11 +4,13 @@ import com.cloudgaming.userservice.container.KafkaTestContainerSingleton
 import com.cloudgaming.userservice.container.KeycloakTestContainerSingleton
 import com.cloudgaming.userservice.container.PostgresTestContainerSingleton
 import com.cloudgaming.userservice.container.RedisTestContainerSingleton
+import com.cloudgaming.userservice.dto.UserEventProducer
 import org.junit.jupiter.api.Test
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
+import org.springframework.test.context.bean.override.mockito.MockitoBean
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 @ActiveProfiles("test")
@@ -38,6 +40,9 @@ class UserServiceApplicationTests {
             registry.add("app.security.internal-secret") { "test-internal-secret" }
         }
     }
+
+    @MockitoBean
+    private lateinit var userEventProducer: UserEventProducer
 
     @Test
     fun contextLoads() {
