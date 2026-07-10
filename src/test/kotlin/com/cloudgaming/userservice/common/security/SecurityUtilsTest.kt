@@ -135,7 +135,7 @@ class SecurityUtilsTest {
         }
 
         @Test
-        fun `should throw UserNotFoundException when provisioning returns null`() {
+        fun `should propagate UserNotFoundException when provisioning throws`() {
             val jwt = buildJwt(subject = "unknown-keycloak-id")
             setJwtAuth(jwt)
             whenever(userProvisioningService.requireInternalUserId("unknown-keycloak-id"))

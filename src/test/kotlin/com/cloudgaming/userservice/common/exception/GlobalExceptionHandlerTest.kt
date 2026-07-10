@@ -417,8 +417,9 @@ class GlobalExceptionHandlerTest {
 
         @Test
         fun `should return 415 for HttpMediaTypeNotSupportedException`() {
-            val mediaType = MediaType.parseMediaType("application/xml")
-            val ex = HttpMediaTypeNotSupportedException(mediaType, singletonList(mediaType))
+            val rejectedMediaType = MediaType.parseMediaType("application/xml")
+            val supportedMediaType = MediaType.parseMediaType("application/json")
+            val ex = HttpMediaTypeNotSupportedException(rejectedMediaType, singletonList(supportedMediaType))
             val webRequest = ServletWebRequest("/api/v1/users")
 
             val response = handler.invokeHandleHttpMediaTypeNotSupported(

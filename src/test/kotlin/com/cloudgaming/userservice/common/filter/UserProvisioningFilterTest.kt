@@ -54,7 +54,7 @@ class UserProvisioningFilterTest {
     inner class WithJwtAuthentication {
 
         @Test
-        fun `should call ensureUserExists when JWT is present`() {
+        fun `should call validateUserExists when JWT is present`() {
             val jwt = buildJwt(subject = "kc-abc", email = "user@test.com", preferredUsername = "user")
             SecurityContextHolder.getContext().authentication = JwtAuthenticationToken(jwt)
 
@@ -63,7 +63,7 @@ class UserProvisioningFilterTest {
 
             filter.doFilter(request, response, chain)
 
-            verify(provisioningService).ensureUserExists(eq("kc-abc"), eq("user@test.com"), eq("user"))
+            verify(provisioningService).validateUserExists(eq("kc-abc"), eq("user@test.com"))
             verify(chain).doFilter(request, response)
         }
 
@@ -71,7 +71,7 @@ class UserProvisioningFilterTest {
         fun `should continue filter chain even if provisioning fails`() {
             val jwt = buildJwt(subject = "kc-abc")
             SecurityContextHolder.getContext().authentication = JwtAuthenticationToken(jwt)
-            whenever(provisioningService.ensureUserExists(any(), any(), any()))
+            whenever(provisioningService.validateUserExists(any(), any()))
                 .thenThrow(RuntimeException("DB down"))
 
             val request = MockHttpServletRequest("GET", "/api/v1/users/me")
@@ -83,7 +83,7 @@ class UserProvisioningFilterTest {
         }
 
         @Test
-        fun `should handle null email and displayName in JWT`() {
+        fun `should handle null email in JWT`() {
             val jwt = buildJwt(subject = "kc-abc", email = null, preferredUsername = null)
             SecurityContextHolder.getContext().authentication = JwtAuthenticationToken(jwt)
 
@@ -92,7 +92,7 @@ class UserProvisioningFilterTest {
 
             filter.doFilter(request, response, chain)
 
-            verify(provisioningService).ensureUserExists(eq("kc-abc"), eq(null), eq(null))
+            verify(provisioningService).validateUserExists(eq("kc-abc"), eq(null))
         }
 
         @Test
@@ -110,7 +110,7 @@ class UserProvisioningFilterTest {
 
             filter.doFilter(request, response, chain)
 
-            verify(provisioningService, never()).ensureUserExists(any(), any(), any())
+            verify(provisioningService, never()).validateUserExists(any(), any())
             verify(chain).doFilter(request, response)
         }
     }

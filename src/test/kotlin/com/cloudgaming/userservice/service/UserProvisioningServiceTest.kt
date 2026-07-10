@@ -206,8 +206,7 @@ class UserProvisioningServiceTest {
             latch.await(10, TimeUnit.SECONDS)
             executor.shutdown()
 
-            val successCount = threadCount - exceptions.size
-            assertThat(successCount).isGreaterThan(0)
+            assertThat(results.size + exceptions.size).isEqualTo(threadCount)
             assertThat(results.map { it.id }.toSet()).hasSize(1)
             assertThat(userRepository.count()).isEqualTo(1L)
         }

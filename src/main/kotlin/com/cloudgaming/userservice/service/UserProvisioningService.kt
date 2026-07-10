@@ -31,7 +31,7 @@ class UserProvisioningService(
         if (redisTemplate.hasKey(existsKey)) {
             logger.debug("Fast path: user {} exists in Redis cache", keycloakId)
             updateLastLoginAsync(keycloakId)
-            return getInternalUser(keycloakId, email, displayName)
+            return getInternalUserByKeycloakId(keycloakId, email)
         }
 
         val existing = userRepository.findByKeycloakId(keycloakId)
@@ -72,6 +72,18 @@ class UserProvisioningService(
         }
     }
 
+    @Transactional
+    fun validateUserExists(keycloakId: String, email: String?) {
+        val existsKey = "${RedisKey.EXISTS_PREFIX}$keycloakId"
+        if (redisTemplate.hasKey(existsKey)) {
+            logger.debug("Fast path (validate): user {} exists in Redis cache", keycloakId)
+            updateLastLoginAsync(keycloakId)
+            return
+        }
+
+        ensureUserExists(keycloakId, email, null)
+    }
+
     fun getInternalUserId(keycloakId: String): UUID? {
         val cached = redisTemplate.opsForValue().get("${RedisKey.ID_MAPPING_PREFIX}$keycloakId")
         if (cached != null) {
@@ -104,6 +116,20 @@ class UserProvisioningService(
         syncEmailIfNeeded(user, email)
         cacheUserIdMapping(keycloakId, user.id)
         return user
+    }
+
+    private fun getInternalUserByKeycloakId(keycloakId: String, email: String?): User {
+        val idMapping = redisTemplate.opsForValue().get("${RedisKey.ID_MAPPING_PREFIX}$keycloakId")
+        if (idMapping != null) {
+            val userId = UUID.fromString(idMapping)
+            val user = userRepository.findById(userId).orElseThrow {
+                UserNotFoundException.byKeycloakId(keycloakId)
+            }
+            syncEmailIfNeeded(user, email)
+            return user
+        }
+        return userRepository.findByKeycloakId(keycloakId)
+            ?: throw UserNotFoundException.byKeycloakId(keycloakId)
     }
 
     private fun syncEmailIfNeeded(user: User, emailFromJwt: String?) {
