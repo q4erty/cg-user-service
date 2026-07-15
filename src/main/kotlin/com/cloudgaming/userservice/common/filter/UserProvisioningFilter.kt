@@ -14,7 +14,7 @@ import org.springframework.stereotype.Component
 import org.springframework.web.filter.OncePerRequestFilter
 
 @Component
-@Order(Ordered.HIGHEST_PRECEDENCE + 20)
+@Order(Ordered.HIGHEST_PRECEDENCE + 10)
 class UserProvisioningFilter(
     private val provisioningService: UserProvisioningService
 ) : OncePerRequestFilter() {
