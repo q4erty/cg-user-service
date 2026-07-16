@@ -178,13 +178,14 @@ class GlobalExceptionHandler : ResponseEntityExceptionHandler() {
         }
 
         val errorId = UUID.randomUUID().toString()
-        val message = when (body) {
+        val baseMessage = when (body) {
             is String -> body
-            else -> if (status == HttpStatus.INTERNAL_SERVER_ERROR) {
-                "${ErrorCode.INTERNAL_ERROR.defaultMessage}. Reference ID: $errorId"
-            } else {
-                ex.message ?: "Unexpected error"
-            }
+            else -> ex.message ?: "Unexpected error"
+        }
+        val message = if (status == HttpStatus.INTERNAL_SERVER_ERROR) {
+            "${baseMessage}. Reference ID: $errorId"
+        } else {
+            baseMessage
         }
 
         val errorResponse = ErrorResponse(

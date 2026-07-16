@@ -90,6 +90,11 @@ class SecurityConfig(
     }
 
     @Bean
+    fun userProvisioningFilterRegistration(): FilterRegistrationBean<UserProvisioningFilter> {
+        return FilterRegistrationBean(userProvisioningFilter).apply { isEnabled = false }
+    }
+
+    @Bean
     fun authenticationEntryPoint(): AuthenticationEntryPoint {
         return AuthenticationEntryPoint { request, response, authException ->
             response.characterEncoding = HttpDefaults.CHARACTER_ENCODING

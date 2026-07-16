@@ -73,6 +73,8 @@ class ProfileServiceTest {
             assertThat(result.avatarUrl).isEqualTo("https://example.com/avatar.png")
             assertThat(result.balance).isEqualByComparingTo(BigDecimal("150.00"))
             assertThat(result.currency).isEqualTo("RUB")
+            assertThat(result.createdAt).isEqualTo(Instant.parse("2026-01-01T00:00:00Z"))
+            assertThat(result.lastLoginAt).isEqualTo(Instant.parse("2026-06-19T12:00:00Z"))
         }
 
         @Test
