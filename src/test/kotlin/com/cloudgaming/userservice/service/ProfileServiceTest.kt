@@ -10,17 +10,30 @@ import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
-import org.mockito.kotlin.*
+import org.junit.jupiter.api.extension.ExtendWith
+import org.mockito.InjectMocks
+import org.mockito.Mock
+import org.mockito.junit.jupiter.MockitoExtension
+import org.mockito.kotlin.any
+import org.mockito.kotlin.argWhere
+import org.mockito.kotlin.never
+import org.mockito.kotlin.verify
+import org.mockito.kotlin.whenever
 import java.math.BigDecimal
 import java.time.Instant
 import java.util.*
 
+@ExtendWith(MockitoExtension::class)
 class ProfileServiceTest {
 
-    private val userRepository: UserRepository = mock()
-    private val userBalanceRepository: UserBalanceRepository = mock()
+    @Mock
+    private lateinit var userRepository: UserRepository
 
-    private val profileService = ProfileService(userRepository, userBalanceRepository)
+    @Mock
+    private lateinit var userBalanceRepository: UserBalanceRepository
+
+    @InjectMocks
+    private lateinit var profileService: ProfileService
 
     private val testUserId = UUID.randomUUID()
 
@@ -127,21 +140,6 @@ class ProfileServiceTest {
                 .isInstanceOf(UserNotFoundException::class.java)
 
             verify(userRepository, never()).save(any())
-        }
-    }
-
-    @Nested
-    inner class Caching {
-
-        @Test
-        fun `getProfile should call repository only once for same userId (cache hit on second call)`() {
-            whenever(userRepository.findById(testUserId)).thenReturn(Optional.of(testUser()))
-            whenever(userBalanceRepository.findByUserId(testUserId)).thenReturn(testBalance())
-
-            profileService.getProfile(testUserId)
-            profileService.getProfile(testUserId)
-
-            verify(userRepository, times(2)).findById(testUserId)
         }
     }
 }

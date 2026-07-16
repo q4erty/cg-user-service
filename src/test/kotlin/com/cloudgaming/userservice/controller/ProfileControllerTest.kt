@@ -3,11 +3,8 @@ package com.cloudgaming.userservice.controller
 import com.cloudgaming.userservice.common.exception.UserNotFoundException
 import com.cloudgaming.userservice.common.security.InternalSecretFilter
 import com.cloudgaming.userservice.common.security.SecurityUtils
-import com.cloudgaming.userservice.container.KafkaTestContainerSingleton
-import com.cloudgaming.userservice.container.PostgresTestContainerSingleton
-import com.cloudgaming.userservice.container.RedisTestContainerSingleton
+import com.cloudgaming.userservice.config.SecurityConfig
 import com.cloudgaming.userservice.dto.UpdateProfileRequest
-import com.cloudgaming.userservice.dto.UserEventProducer
 import com.cloudgaming.userservice.dto.UserProfileDto
 import com.cloudgaming.userservice.integration.keycloak.KeycloakRoleConverter
 import com.cloudgaming.userservice.service.ProfileService
@@ -27,14 +24,11 @@ import org.mockito.kotlin.doAnswer
 import org.mockito.kotlin.doThrow
 import org.mockito.kotlin.whenever
 import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.boot.test.context.SpringBootTest
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest
+import org.springframework.context.annotation.Import
 import org.springframework.http.MediaType
 import org.springframework.security.core.authority.SimpleGrantedAuthority
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt
-import org.springframework.test.context.ActiveProfiles
-import org.springframework.test.context.DynamicPropertyRegistry
-import org.springframework.test.context.DynamicPropertySource
 import org.springframework.test.context.bean.override.mockito.MockitoBean
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
@@ -45,28 +39,9 @@ import java.math.BigDecimal
 import java.time.Instant
 import java.util.*
 
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.MOCK)
-@AutoConfigureMockMvc
-@ActiveProfiles("test")
+@WebMvcTest(ProfileController::class)
+@Import(SecurityConfig::class)
 class ProfileControllerTest {
-
-    companion object {
-        private val postgres = PostgresTestContainerSingleton.instance
-        private val redis = RedisTestContainerSingleton.instance
-        private val kafka = KafkaTestContainerSingleton.instance
-
-        @JvmStatic
-        @DynamicPropertySource
-        fun overrideProps(registry: DynamicPropertyRegistry) {
-            registry.add("spring.datasource.url") { postgres.jdbcUrl }
-            registry.add("spring.datasource.username") { postgres.username }
-            registry.add("spring.datasource.password") { postgres.password }
-            registry.add("spring.data.redis.host") { redis.host }
-            registry.add("spring.data.redis.port") { redis.getMappedPort(6379) }
-            registry.add("spring.data.redis.password") { RedisTestContainerSingleton.PASSWORD }
-            registry.add("spring.kafka.bootstrap-servers") { kafka.bootstrapServers }
-        }
-    }
 
     private val objectMapper: ObjectMapper = jacksonObjectMapper().apply {
         registerKotlinModule()
@@ -83,16 +58,15 @@ class ProfileControllerTest {
     private lateinit var securityUtils: SecurityUtils
 
     @MockitoBean
-    private lateinit var userProvisioningService: UserProvisioningService
-
-    @MockitoBean
     private lateinit var internalSecretFilter: InternalSecretFilter
 
     @MockitoBean
-    private lateinit var userEventProducer: UserEventProducer
+    private lateinit var keycloakRoleConverter: KeycloakRoleConverter
 
     @MockitoBean
-    private lateinit var keycloakRoleConverter: KeycloakRoleConverter
+    private lateinit var userProvisioningService: UserProvisioningService
+
+    private val testUserId: UUID = UUID.randomUUID()
 
     @BeforeEach
     fun setUp() {
@@ -103,8 +77,6 @@ class ProfileControllerTest {
             chain.doFilter(request, response)
         }.`when`(internalSecretFilter).doFilter(any(), any(), any())
     }
-
-    private val testUserId: UUID = UUID.randomUUID()
 
     private fun testProfileDto() = UserProfileDto(
         id = testUserId,
@@ -165,8 +137,16 @@ class ProfileControllerTest {
             displayName = "Alice Updated",
             avatarUrl = "https://example.com/new-avatar.png"
         )
-        val updatedDto =
-            testProfileDto().copy(displayName = "Alice Updated", avatarUrl = "https://example.com/new-avatar.png")
+        val updatedDto = UserProfileDto(
+            id = testUserId,
+            email = "alice@example.com",
+            displayName = "Alice Updated",
+            avatarUrl = "https://example.com/new-avatar.png",
+            balance = BigDecimal("150.00"),
+            currency = "RUB",
+            createdAt = Instant.parse("2026-01-01T00:00:00Z"),
+            lastLoginAt = Instant.parse("2026-06-19T12:00:00Z")
+        )
 
         whenever(securityUtils.getCurrentUserId()).thenReturn(testUserId)
         whenever(profileService.updateProfile(testUserId, request)).thenReturn(updatedDto)
@@ -226,7 +206,16 @@ class ProfileControllerTest {
     @Test
     fun `PATCH me should accept null avatarUrl`() {
         val request = UpdateProfileRequest(displayName = "Alice", avatarUrl = null)
-        val updatedDto = testProfileDto().copy(avatarUrl = null)
+        val updatedDto = UserProfileDto(
+            id = testUserId,
+            email = "alice@example.com",
+            displayName = "Alice",
+            avatarUrl = null,
+            balance = BigDecimal("150.00"),
+            currency = "RUB",
+            createdAt = Instant.parse("2026-01-01T00:00:00Z"),
+            lastLoginAt = Instant.parse("2026-06-19T12:00:00Z")
+        )
 
         whenever(securityUtils.getCurrentUserId()).thenReturn(testUserId)
         whenever(profileService.updateProfile(any(), any())).thenReturn(updatedDto)

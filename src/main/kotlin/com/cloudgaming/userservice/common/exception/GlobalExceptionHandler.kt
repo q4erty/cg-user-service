@@ -177,10 +177,11 @@ class GlobalExceptionHandler : ResponseEntityExceptionHandler() {
             return ResponseEntity.status(status).headers(headers).body(body)
         }
 
+        val errorId = UUID.randomUUID().toString()
         val message = when (body) {
             is String -> body
             else -> if (status == HttpStatus.INTERNAL_SERVER_ERROR) {
-                "${ErrorCode.INTERNAL_ERROR.defaultMessage}. Reference ID: ${UUID.randomUUID()}"
+                "${ErrorCode.INTERNAL_ERROR.defaultMessage}. Reference ID: $errorId"
             } else {
                 ex.message ?: "Unexpected error"
             }
@@ -195,7 +196,7 @@ class GlobalExceptionHandler : ResponseEntityExceptionHandler() {
             message = message,
             path = request.getDescription(false).removePrefix("uri="),
             details = if (status == HttpStatus.INTERNAL_SERVER_ERROR) {
-                mapOf(ErrorDetailKey.ERROR_ID to UUID.randomUUID().toString())
+                mapOf(ErrorDetailKey.ERROR_ID to errorId)
             } else {
                 null
             }
@@ -354,4 +355,22 @@ class GlobalExceptionHandler : ResponseEntityExceptionHandler() {
             )
     }
 
+    @ExceptionHandler(Exception::class)
+    fun handleUncaughtException(
+        ex: Exception,
+        request: HttpServletRequest
+    ): ResponseEntity<ErrorResponse> {
+        logger.error("Unhandled exception: {}", ex.message, ex)
+
+        val errorId = UUID.randomUUID().toString()
+
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(
+            ErrorResponse(
+                error = ErrorCode.INTERNAL_ERROR.code,
+                message = "${ErrorCode.INTERNAL_ERROR.defaultMessage}. Reference ID: $errorId",
+                path = request.requestURI,
+                details = mapOf(ErrorDetailKey.ERROR_ID to errorId)
+            )
+        )
     }
+}

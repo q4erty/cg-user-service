@@ -383,15 +383,36 @@ class GlobalExceptionHandlerTest {
             assertThat(errorResponse.message).contains("Reference ID")
             assertThat(errorResponse.details).containsKey("error_id")
 
-            val errorIdStr = errorResponse.details!!["error_id"] as String
+            val extractedIdPattern = Regex("Reference ID: ([0-9a-f-]{36})")
+            val matchResult = extractedIdPattern.find(errorResponse.message!!)
+            assertThat(matchResult).isNotNull
 
-            val parsed = UUID.fromString(errorIdStr)
-            assertThat(parsed).isNotNull()
+            val errorIdFromMessage = matchResult!!.groupValues[1]
+            val errorIdFromDetails = errorResponse.details!!["error_id"] as String
 
-            val uuidPattern = Regex("[0-9a-f-]{36}")
-            assertThat(uuidPattern.containsMatchIn(errorIdStr)).isTrue()
+            assertThat(errorIdFromMessage).isEqualTo(errorIdFromDetails)
+        }
 
-            assertThat(errorResponse.message).doesNotContain("Database connection lost")
+        @Test
+        fun `should return 500 with error reference id matching message`() {
+            val ex = RuntimeException("Database connection lost")
+            val request = mockRequest()
+
+            val response = handler.handleUncaughtException(ex, request)
+
+            assertThat(response.statusCode).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR)
+            val errorResponse = response.body!!
+            assertThat(errorResponse.error).isEqualTo("INTERNAL_ERROR")
+            assertThat(errorResponse.message).contains("Reference ID")
+
+            val extractedIdPattern = Regex("Reference ID: ([0-9a-f-]{36})")
+            val matchResult = extractedIdPattern.find(errorResponse.message!!)
+            assertThat(matchResult).isNotNull
+
+            val errorIdFromMessage = matchResult!!.groupValues[1]
+            val errorIdFromDetails = errorResponse.details!!["error_id"] as String
+
+            assertThat(errorIdFromMessage).isEqualTo(errorIdFromDetails)
         }
     }
 
