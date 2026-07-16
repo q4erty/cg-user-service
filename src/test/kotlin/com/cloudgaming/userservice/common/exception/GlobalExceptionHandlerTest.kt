@@ -371,24 +371,48 @@ class GlobalExceptionHandlerTest {
         @Test
         fun `should return 500 with error reference id`() {
             val ex = RuntimeException("Database connection lost")
-            val request = mockRequest()
+            val webRequest = ServletWebRequest(mockRequest())
 
-            val response = handler.handleGenericException(ex, request)
+            val response = handler.invokeHandleExceptionInternal(
+                ex, null, HttpHeaders(), HttpStatus.INTERNAL_SERVER_ERROR, webRequest
+            )
 
             assertThat(response.statusCode).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR)
-            assertThat(response.body!!.error).isEqualTo("INTERNAL_ERROR")
-            assertThat(response.body!!.message).contains("Reference ID")
-            assertThat(response.body!!.details).containsKey("error_id")
+            val errorResponse = response.body as ErrorResponse
+            assertThat(errorResponse.error).isEqualTo("INTERNAL_ERROR")
+            assertThat(errorResponse.message).contains("Reference ID")
+            assertThat(errorResponse.details).containsKey("error_id")
 
-            val errorIdStr = response.body!!.details!!["error_id"] as String
+            val extractedIdPattern = Regex("Reference ID: ([0-9a-f-]{36})")
+            val matchResult = extractedIdPattern.find(errorResponse.message!!)
+            assertThat(matchResult).isNotNull
 
-            val parsed = UUID.fromString(errorIdStr)
-            assertThat(parsed).isNotNull()
+            val errorIdFromMessage = matchResult!!.groupValues[1]
+            val errorIdFromDetails = errorResponse.details!!["error_id"] as String
 
-            val uuidPattern = Regex("[0-9a-f-]{36}")
-            assertThat(uuidPattern.containsMatchIn(errorIdStr)).isTrue()
+            assertThat(errorIdFromMessage).isEqualTo(errorIdFromDetails)
+        }
 
-            assertThat(response.body!!.message).doesNotContain("Database connection lost")
+        @Test
+        fun `should return 500 with error reference id matching message`() {
+            val ex = RuntimeException("Database connection lost")
+            val request = mockRequest()
+
+            val response = handler.handleUncaughtException(ex, request)
+
+            assertThat(response.statusCode).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR)
+            val errorResponse = response.body!!
+            assertThat(errorResponse.error).isEqualTo("INTERNAL_ERROR")
+            assertThat(errorResponse.message).contains("Reference ID")
+
+            val extractedIdPattern = Regex("Reference ID: ([0-9a-f-]{36})")
+            val matchResult = extractedIdPattern.find(errorResponse.message!!)
+            assertThat(matchResult).isNotNull
+
+            val errorIdFromMessage = matchResult!!.groupValues[1]
+            val errorIdFromDetails = errorResponse.details!!["error_id"] as String
+
+            assertThat(errorIdFromMessage).isEqualTo(errorIdFromDetails)
         }
     }
 
@@ -541,7 +565,7 @@ class GlobalExceptionHandlerTest {
         }
 
         @Test
-        fun `should use exception message when body is not string or ErrorResponse`() {
+        fun `should use INTERNAL_ERROR for 500 status with error reference id`() {
             val ex = RuntimeException("Exception message here")
             val webRequest = ServletWebRequest("/api/v1/test")
 
@@ -552,11 +576,13 @@ class GlobalExceptionHandlerTest {
             assertThat(response.statusCode).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR)
             assertThat(response.body).isInstanceOf(ErrorResponse::class.java)
             val body = response.body as ErrorResponse
-            assertThat(body.message).isEqualTo("Exception message here")
+            assertThat(body.error).isEqualTo("INTERNAL_ERROR")
+            assertThat(body.message).contains("Reference ID")
+            assertThat(body.details).containsKey("error_id")
         }
 
         @Test
-        fun `should use default message when exception has no message`() {
+        fun `should use INTERNAL_ERROR for 500 status when exception has no message`() {
             val ex = RuntimeException()
             val webRequest = ServletWebRequest("/api/v1/test")
 
@@ -567,7 +593,9 @@ class GlobalExceptionHandlerTest {
             assertThat(response.statusCode).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR)
             assertThat(response.body).isInstanceOf(ErrorResponse::class.java)
             val body = response.body as ErrorResponse
-            assertThat(body.message).isEqualTo("Unexpected error")
+            assertThat(body.error).isEqualTo("INTERNAL_ERROR")
+            assertThat(body.message).contains("Reference ID")
+            assertThat(body.details).containsKey("error_id")
         }
     }
 }

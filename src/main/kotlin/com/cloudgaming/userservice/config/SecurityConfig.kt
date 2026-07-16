@@ -1,6 +1,7 @@
 package com.cloudgaming.userservice.config
 
 import com.cloudgaming.userservice.common.exception.ErrorResponse
+import com.cloudgaming.userservice.common.filter.UserProvisioningFilter
 import com.cloudgaming.userservice.common.security.InternalSecretFilter
 import com.cloudgaming.userservice.constants.ErrorCode
 import com.cloudgaming.userservice.constants.HttpDefaults
@@ -35,6 +36,7 @@ import org.springframework.boot.web.servlet.FilterRegistrationBean
 class SecurityConfig(
     private val keycloakRoleConverter: KeycloakRoleConverter,
     private val internalSecretFilter: InternalSecretFilter,
+    private val userProvisioningFilter: UserProvisioningFilter,
     private val corsProperties: CorsProperties
 ) {
 
@@ -71,6 +73,7 @@ class SecurityConfig(
                     }
             }
             .addFilterBefore(internalSecretFilter, BearerTokenAuthenticationFilter::class.java)
+            .addFilterAfter(userProvisioningFilter, BearerTokenAuthenticationFilter::class.java)
             .build()
     }
 
@@ -84,6 +87,11 @@ class SecurityConfig(
     @Bean
     fun internalSecretFilterRegistration(filter: InternalSecretFilter): FilterRegistrationBean<InternalSecretFilter> {
         return FilterRegistrationBean(filter).apply { isEnabled = false }
+    }
+
+    @Bean
+    fun userProvisioningFilterRegistration(): FilterRegistrationBean<UserProvisioningFilter> {
+        return FilterRegistrationBean(userProvisioningFilter).apply { isEnabled = false }
     }
 
     @Bean

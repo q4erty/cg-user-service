@@ -20,7 +20,9 @@ import org.springframework.web.bind.annotation.RestControllerAdvice
 import org.springframework.web.context.request.WebRequest
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler
 import org.springframework.web.servlet.NoHandlerFoundException
+import org.springframework.web.servlet.resource.NoResourceFoundException
 import org.springframework.http.converter.HttpMessageNotReadableException
+import org.springframework.web.ErrorResponseException
 import java.util.*
 
 @RestControllerAdvice
@@ -129,11 +131,28 @@ class GlobalExceptionHandler : ResponseEntityExceptionHandler() {
         status: HttpStatusCode,
         request: WebRequest
     ): ResponseEntity<Any>? {
-        return createErrorResponse(
-            error = ErrorCode.NOT_FOUND.code,
-            message = "No endpoint found for ${ex.httpMethod} ${ex.requestURL}",
-            status = HttpStatus.NOT_FOUND,
-            request = request
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(
+            ErrorResponse(
+                error = ErrorCode.NOT_FOUND.code,
+                message = "No endpoint found for ${ex.httpMethod} ${ex.requestURL}",
+                path = request.getDescription(false).removePrefix("uri=")
+            )
+        )
+    }
+
+    override fun handleNoResourceFoundException(
+        ex: NoResourceFoundException,
+        headers: HttpHeaders,
+        status: HttpStatusCode,
+        request: WebRequest
+    ): ResponseEntity<Any>? {
+        logger.warn("No resource found: {}", ex.message)
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(
+            ErrorResponse(
+                error = ErrorCode.NOT_FOUND.code,
+                message = "No endpoint found for ${request.getDescription(false).removePrefix("uri=")}",
+                path = request.getDescription(false).removePrefix("uri=")
+            )
         )
     }
 
@@ -144,19 +163,44 @@ class GlobalExceptionHandler : ResponseEntityExceptionHandler() {
         status: HttpStatusCode,
         request: WebRequest
     ): ResponseEntity<Any> {
+        if (ex is ErrorResponseException) {
+            return ResponseEntity.status(status).headers(headers).body(
+                ErrorResponse(
+                    error = status.toString(),
+                    message = ex.message ?: "Error",
+                    path = request.getDescription(false).removePrefix("uri=")
+                )
+            )
+        }
+
         if (body is ErrorResponse) {
             return ResponseEntity.status(status).headers(headers).body(body)
         }
 
-        val message = when (body) {
+        val errorId = UUID.randomUUID().toString()
+        val baseMessage = when (body) {
             is String -> body
             else -> ex.message ?: "Unexpected error"
         }
+        val message = if (status == HttpStatus.INTERNAL_SERVER_ERROR) {
+            "${baseMessage}. Reference ID: $errorId"
+        } else {
+            baseMessage
+        }
 
         val errorResponse = ErrorResponse(
-            error = status.toString(),
+            error = if (status == HttpStatus.INTERNAL_SERVER_ERROR) {
+                ErrorCode.INTERNAL_ERROR.code
+            } else {
+                status.toString()
+            },
             message = message,
-            path = request.getDescription(false).removePrefix("uri=")
+            path = request.getDescription(false).removePrefix("uri="),
+            details = if (status == HttpStatus.INTERNAL_SERVER_ERROR) {
+                mapOf(ErrorDetailKey.ERROR_ID to errorId)
+            } else {
+                null
+            }
         )
 
         return ResponseEntity.status(status).headers(headers).body(errorResponse)
@@ -313,19 +357,20 @@ class GlobalExceptionHandler : ResponseEntityExceptionHandler() {
     }
 
     @ExceptionHandler(Exception::class)
-    fun handleGenericException(
+    fun handleUncaughtException(
         ex: Exception,
         request: HttpServletRequest
     ): ResponseEntity<ErrorResponse> {
-        val errorId = UUID.randomUUID()
-        logger.error("Unexpected error [{}]: {}", errorId, ex.message, ex)
+        logger.error("Unhandled exception: {}", ex.message, ex)
+
+        val errorId = UUID.randomUUID().toString()
 
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(
             ErrorResponse(
                 error = ErrorCode.INTERNAL_ERROR.code,
                 message = "${ErrorCode.INTERNAL_ERROR.defaultMessage}. Reference ID: $errorId",
                 path = request.requestURI,
-                details = mapOf(ErrorDetailKey.ERROR_ID to errorId.toString())
+                details = mapOf(ErrorDetailKey.ERROR_ID to errorId)
             )
         )
     }

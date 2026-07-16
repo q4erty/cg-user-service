@@ -27,7 +27,7 @@ extra["springCloudVersion"] = "2025.1.2"
 extra["testcontainersVersion"] = "1.20.4"
 extra["redissonVersion"] = "4.6.0"
 extra["resilience4jVersion"] = "2.2.0"
-extra["springdocVersion"] = "2.3.0"
+extra["springdocVersion"] = "3.0.3"
 
 dependencies {
     implementation("org.springframework.boot:spring-boot-starter-web")
