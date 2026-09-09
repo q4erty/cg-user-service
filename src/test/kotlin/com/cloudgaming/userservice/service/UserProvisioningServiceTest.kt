@@ -6,7 +6,7 @@ import com.cloudgaming.userservice.container.KafkaTestContainerSingleton
 import com.cloudgaming.userservice.container.PostgresTestContainerSingleton
 import com.cloudgaming.userservice.container.RedisTestContainerSingleton
 import com.cloudgaming.userservice.domain.User
-import com.cloudgaming.userservice.dto.UserEventProducer
+import com.cloudgaming.userservice.events.UserEventProducer
 import com.cloudgaming.userservice.persistence.UserBalanceRepository
 import com.cloudgaming.userservice.persistence.UserRepository
 import org.assertj.core.api.Assertions.assertThat
@@ -52,6 +52,7 @@ class UserProvisioningServiceTest {
             registry.add("spring.data.redis.port") { redis.getMappedPort(6379) }
             registry.add("spring.data.redis.password") { RedisTestContainerSingleton.PASSWORD }
             registry.add("spring.kafka.bootstrap-servers") { kafka.bootstrapServers }
+            registry.add("app.kafka.auto-create-topics") { "false" }
         }
     }
 

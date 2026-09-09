@@ -4,7 +4,7 @@ import com.cloudgaming.userservice.common.security.InternalSecretFilter
 import com.cloudgaming.userservice.container.KafkaTestContainerSingleton
 import com.cloudgaming.userservice.container.PostgresTestContainerSingleton
 import com.cloudgaming.userservice.container.RedisTestContainerSingleton
-import com.cloudgaming.userservice.dto.UserEventProducer
+import com.cloudgaming.userservice.events.UserEventProducer
 import com.cloudgaming.userservice.integration.keycloak.KeycloakRoleConverter
 import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest
@@ -46,6 +46,7 @@ class SecurityConfigTest {
             registry.add("spring.data.redis.port") { redis.getMappedPort(6379) }
             registry.add("spring.data.redis.password") { RedisTestContainerSingleton.PASSWORD }
             registry.add("spring.kafka.bootstrap-servers") { kafka.bootstrapServers }
+            registry.add("app.kafka.auto-create-topics") { "false" }
         }
     }
 

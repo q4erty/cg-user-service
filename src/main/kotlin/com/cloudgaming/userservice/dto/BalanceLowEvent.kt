@@ -2,14 +2,15 @@ package com.cloudgaming.userservice.dto
 
 import com.cloudgaming.userservice.constants.KafkaEventTypes
 import com.fasterxml.jackson.annotation.JsonProperty
+import java.math.BigDecimal
 import java.time.Instant
-import java.util.*
+import java.util.UUID
 
-data class UserRegisteredEvent(
+data class BalanceLowEvent(
     @JsonProperty("event_id") val eventId: UUID = UUID.randomUUID(),
     @JsonProperty("occurred_at") val occurredAt: Instant = Instant.now(),
-    @JsonProperty("event_type") val eventType: String = KafkaEventTypes.USER_REGISTERED,
+    @JsonProperty("event_type") val eventType: String = KafkaEventTypes.BALANCE_LOW,
     @JsonProperty("user_id") val userId: UUID,
-    @JsonProperty("email") val email: String,
-    @JsonProperty("keycloak_id") val keycloakId: String
+    @JsonProperty("current_balance") val currentBalance: BigDecimal,
+    @JsonProperty("threshold") val threshold: BigDecimal
 )

@@ -4,7 +4,7 @@ import com.cloudgaming.userservice.common.exception.UserNotFoundException
 import com.cloudgaming.userservice.constants.RedisKey
 import com.cloudgaming.userservice.domain.User
 import com.cloudgaming.userservice.domain.UserBalance
-import com.cloudgaming.userservice.dto.UserEventProducer
+import com.cloudgaming.userservice.events.UserEventProducer
 import com.cloudgaming.userservice.persistence.UserBalanceRepository
 import com.cloudgaming.userservice.persistence.UserRepository
 import org.slf4j.LoggerFactory

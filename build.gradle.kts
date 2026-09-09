@@ -41,6 +41,7 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-cache")
 
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
+    implementation("tools.jackson.module:jackson-module-kotlin")
     implementation("org.jetbrains.kotlin:kotlin-reflect")
 
     runtimeOnly("org.postgresql:postgresql")
@@ -49,6 +50,7 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-flyway")
 
     implementation("org.springframework.kafka:spring-kafka")
+    implementation("org.springframework.boot:spring-boot-kafka")
 
     implementation("org.redisson:redisson-spring-boot-starter:${property("redissonVersion")}")
     implementation("com.github.ben-manes.caffeine:caffeine:3.1.8")
