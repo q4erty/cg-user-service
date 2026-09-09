@@ -4,7 +4,7 @@ import com.cloudgaming.userservice.container.KafkaTestContainerSingleton
 import com.cloudgaming.userservice.container.KeycloakTestContainerSingleton
 import com.cloudgaming.userservice.container.PostgresTestContainerSingleton
 import com.cloudgaming.userservice.container.RedisTestContainerSingleton
-import com.cloudgaming.userservice.dto.UserEventProducer
+import com.cloudgaming.userservice.events.UserEventProducer
 import org.junit.jupiter.api.Test
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.test.context.ActiveProfiles
@@ -38,6 +38,7 @@ class UserServiceApplicationTests {
             registry.add("keycloak.admin.client-id") { "admin-cli" }
             registry.add("keycloak.admin.client-secret") { "admin" }
             registry.add("app.security.internal-secret") { "test-internal-secret" }
+            registry.add("app.kafka.auto-create-topics") { "false" }
         }
     }
 

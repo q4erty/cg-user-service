@@ -113,8 +113,11 @@ app:
     user-exists-ttl: 24h
 
   kafka:
+    auto-create-topics: true
     topics:
       user-events: ${KAFKA_TOPIC_USER_EVENTS:user-events}
+      payment-transactions: ${KAFKA_TOPIC_PAYMENT_TRANSACTIONS:payment-transactions}
+      session-events: ${KAFKA_TOPIC_SESSION_EVENTS:session-events}
 
 resilience4j:
   retry:
