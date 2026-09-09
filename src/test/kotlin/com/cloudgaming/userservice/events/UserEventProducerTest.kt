@@ -15,6 +15,8 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.boot.test.context.TestConfiguration
+import org.springframework.context.annotation.Bean
 import org.springframework.kafka.annotation.KafkaListener
 import org.springframework.kafka.test.context.EmbeddedKafka
 import org.springframework.test.context.ActiveProfiles
@@ -46,17 +48,12 @@ class UserEventProducerTest {
     @Autowired
     private lateinit var objectMapper: ObjectMapper
 
+    @Autowired
+    private lateinit var eventCollector: EventCollector
+
     companion object {
         private val postgres = PostgresTestContainerSingleton.instance
         private val redis = RedisTestContainerSingleton.instance
-
-        private val receivedUserEvents = ConcurrentHashMap<String, ConsumerRecord<String, ByteArray>>()
-        private val receivedPaymentEvents = ConcurrentHashMap<String, ConsumerRecord<String, ByteArray>>()
-        private val receivedSessionEvents = ConcurrentHashMap<String, ConsumerRecord<String, ByteArray>>()
-
-        private var userLatch = CountDownLatch(0)
-        private var paymentLatch = CountDownLatch(0)
-        private var sessionLatch = CountDownLatch(0)
 
         @JvmStatic
         @DynamicPropertySource
@@ -69,21 +66,289 @@ class UserEventProducerTest {
             registry.add("spring.data.redis.password") { RedisTestContainerSingleton.PASSWORD }
             registry.add("app.kafka.auto-create-topics") { "false" }
         }
-
-        @JvmStatic
-        fun resetLatches(userCount: Int, paymentCount: Int, sessionCount: Int) {
-            receivedUserEvents.clear()
-            receivedPaymentEvents.clear()
-            receivedSessionEvents.clear()
-            userLatch = CountDownLatch(userCount)
-            paymentLatch = CountDownLatch(paymentCount)
-            sessionLatch = CountDownLatch(sessionCount)
-        }
     }
 
     @BeforeEach
     fun setUp() {
-        resetLatches(userCount = 0, paymentCount = 0, sessionCount = 0)
+        eventCollector.reset(userCount = 0, paymentCount = 0, sessionCount = 0)
+    }
+
+    @Test
+    fun `should publish USER_REGISTERED event with correct JSON structure`() {
+        eventCollector.reset(userCount = 1, paymentCount = 0, sessionCount = 0)
+
+        val userId = UUID.randomUUID()
+        eventProducer.publishUserRegistered(
+            userId = userId,
+            email = "alice@example.com",
+            keycloakId = "kc-abc-123"
+        )
+
+        assertThat(eventCollector.userLatch.await(10, TimeUnit.SECONDS)).isTrue
+
+        val record = eventCollector.receivedUserEvents[userId.toString()]
+        assertThat(record).isNotNull
+
+        val json = String(record!!.value())
+        val event = objectMapper.readValue(json, UserRegisteredEvent::class.java)
+
+        assertThat(event.eventId).isNotNull()
+        assertThat(event.occurredAt).isNotNull()
+        assertThat(event.eventType).isEqualTo("USER_REGISTERED")
+        assertThat(event.userId).isEqualTo(userId)
+        assertThat(event.email).isEqualTo("alice@example.com")
+        assertThat(event.keycloakId).isEqualTo("kc-abc-123")
+    }
+
+    @Test
+    fun `should publish USER_ROLE_CHANGED event`() {
+        eventCollector.reset(userCount = 1, paymentCount = 0, sessionCount = 0)
+
+        val targetUserId = UUID.randomUUID()
+        val adminId = UUID.randomUUID()
+
+        eventProducer.publishUserRoleChanged(
+            targetUserId = targetUserId,
+            performedByAdminId = adminId,
+            role = "PREMIUM",
+            action = "ADD"
+        )
+
+        assertThat(eventCollector.userLatch.await(10, TimeUnit.SECONDS)).isTrue
+
+        val record = eventCollector.receivedUserEvents[targetUserId.toString()]
+        val json = String(record!!.value())
+        val event = objectMapper.readValue(json, UserRoleChangedEvent::class.java)
+
+        assertThat(event.eventType).isEqualTo("USER_ROLE_CHANGED")
+        assertThat(event.targetUserId).isEqualTo(targetUserId)
+        assertThat(event.performedByAdminId).isEqualTo(adminId)
+        assertThat(event.role).isEqualTo("PREMIUM")
+        assertThat(event.action).isEqualTo("ADD")
+    }
+
+    @Test
+    fun `should publish BALANCE_LOW event`() {
+        eventCollector.reset(userCount = 1, paymentCount = 0, sessionCount = 0)
+
+        val userId = UUID.randomUUID()
+        eventProducer.publishBalanceLow(
+            userId = userId,
+            currentBalance = BigDecimal("50.00"),
+            threshold = BigDecimal("100.00")
+        )
+
+        assertThat(eventCollector.userLatch.await(10, TimeUnit.SECONDS)).isTrue
+
+        val record = eventCollector.receivedUserEvents[userId.toString()]
+        val json = String(record!!.value())
+        val event = objectMapper.readValue(json, BalanceLowEvent::class.java)
+
+        assertThat(event.eventType).isEqualTo("BALANCE_LOW")
+        assertThat(event.userId).isEqualTo(userId)
+        assertThat(event.currentBalance).isEqualByComparingTo(BigDecimal("50.00"))
+        assertThat(event.threshold).isEqualByComparingTo(BigDecimal("100.00"))
+    }
+
+    @Test
+    fun `should route DEPOSIT to payment-transactions topic`() {
+        eventCollector.reset(userCount = 0, paymentCount = 1, sessionCount = 0)
+
+        val userId = UUID.randomUUID()
+        eventProducer.publishBalanceOperationApplied(
+            userId = userId,
+            transactionId = UUID.randomUUID(),
+            type = "DEPOSIT",
+            amount = BigDecimal("500.00"),
+            newBalance = BigDecimal("650.00")
+        )
+
+        assertThat(eventCollector.paymentLatch.await(10, TimeUnit.SECONDS)).isTrue
+        assertThat(eventCollector.receivedUserEvents).isEmpty()
+        assertThat(eventCollector.receivedSessionEvents).isEmpty()
+
+        val record = eventCollector.receivedPaymentEvents[userId.toString()]
+        assertThat(record).isNotNull
+
+        val event = objectMapper.readValue(record!!.value(), BalanceOperationAppliedEvent::class.java)
+        assertThat(event.type).isEqualTo("DEPOSIT")
+        assertThat(event.amount).isEqualByComparingTo(BigDecimal("500.00"))
+    }
+
+    @Test
+    fun `should route SESSION_DEBIT to session-events topic`() {
+        eventCollector.reset(userCount = 0, paymentCount = 0, sessionCount = 1)
+
+        val userId = UUID.randomUUID()
+        eventProducer.publishBalanceOperationApplied(
+            userId = userId,
+            transactionId = UUID.randomUUID(),
+            type = "SESSION_DEBIT",
+            amount = BigDecimal("-100.00"),
+            newBalance = BigDecimal("400.00")
+        )
+
+        assertThat(eventCollector.sessionLatch.await(10, TimeUnit.SECONDS)).isTrue
+        assertThat(eventCollector.receivedUserEvents).isEmpty()
+        assertThat(eventCollector.receivedPaymentEvents).isEmpty()
+
+        val record = eventCollector.receivedSessionEvents[userId.toString()]
+        assertThat(record).isNotNull
+
+        val event = objectMapper.readValue(record!!.value(), BalanceOperationAppliedEvent::class.java)
+        assertThat(event.type).isEqualTo("SESSION_DEBIT")
+        assertThat(event.amount).isEqualByComparingTo(BigDecimal("-100.00"))
+    }
+
+    @Test
+    fun `should route REFUND to session-events topic`() {
+        eventCollector.reset(userCount = 0, paymentCount = 0, sessionCount = 1)
+
+        val userId = UUID.randomUUID()
+        eventProducer.publishBalanceOperationApplied(
+            userId = userId,
+            transactionId = UUID.randomUUID(),
+            type = "REFUND",
+            amount = BigDecimal("100.00"),
+            newBalance = BigDecimal("500.00")
+        )
+
+        assertThat(eventCollector.sessionLatch.await(10, TimeUnit.SECONDS)).isTrue
+
+        val record = eventCollector.receivedSessionEvents[userId.toString()]
+        val event = objectMapper.readValue(record!!.value(), BalanceOperationAppliedEvent::class.java)
+        assertThat(event.type).isEqualTo("REFUND")
+    }
+
+    @Test
+    fun `should route BONUS to user-events topic`() {
+        eventCollector.reset(userCount = 1, paymentCount = 0, sessionCount = 0)
+
+        val userId = UUID.randomUUID()
+        eventProducer.publishBalanceOperationApplied(
+            userId = userId,
+            transactionId = UUID.randomUUID(),
+            type = "BONUS",
+            amount = BigDecimal("50.00"),
+            newBalance = BigDecimal("150.00")
+        )
+
+        assertThat(eventCollector.userLatch.await(10, TimeUnit.SECONDS)).isTrue
+        assertThat(eventCollector.receivedPaymentEvents).isEmpty()
+        assertThat(eventCollector.receivedSessionEvents).isEmpty()
+
+        val record = eventCollector.receivedUserEvents[userId.toString()]
+        val event = objectMapper.readValue(record!!.value(), BalanceOperationAppliedEvent::class.java)
+        assertThat(event.type).isEqualTo("BONUS")
+    }
+
+    @Test
+    fun `should route ADMIN_ADJUSTMENT to user-events topic`() {
+        eventCollector.reset(userCount = 1, paymentCount = 0, sessionCount = 0)
+
+        val userId = UUID.randomUUID()
+        eventProducer.publishBalanceOperationApplied(
+            userId = userId,
+            transactionId = UUID.randomUUID(),
+            type = "ADMIN_ADJUSTMENT",
+            amount = BigDecimal("1000.00"),
+            newBalance = BigDecimal("1100.00")
+        )
+
+        assertThat(eventCollector.userLatch.await(10, TimeUnit.SECONDS)).isTrue
+
+        val record = eventCollector.receivedUserEvents[userId.toString()]
+        val event = objectMapper.readValue(record!!.value(), BalanceOperationAppliedEvent::class.java)
+        assertThat(event.type).isEqualTo("ADMIN_ADJUSTMENT")
+    }
+
+    @Test
+    fun `should include event_type header in all events`() {
+        eventCollector.reset(userCount = 1, paymentCount = 0, sessionCount = 0)
+
+        eventProducer.publishUserRegistered(
+            userId = UUID.randomUUID(),
+            email = "test@test.com",
+            keycloakId = "kc-1"
+        )
+
+        assertThat(eventCollector.userLatch.await(10, TimeUnit.SECONDS)).isTrue
+
+        val record = eventCollector.receivedUserEvents.values.firstOrNull()
+        assertThat(record).isNotNull
+        assertThat(record!!.headers().lastHeader("event_type")).isNotNull
+        val headerValue = String(record.headers().lastHeader("event_type")!!.value())
+        assertThat(headerValue).isEqualTo("USER_REGISTERED")
+    }
+
+    @Test
+    fun `should use userId as Kafka key for partitioning`() {
+        eventCollector.reset(userCount = 1, paymentCount = 0, sessionCount = 0)
+
+        val userId = UUID.randomUUID()
+        eventProducer.publishUserRegistered(
+            userId = userId,
+            email = "test@test.com",
+            keycloakId = "kc-1"
+        )
+
+        assertThat(eventCollector.userLatch.await(10, TimeUnit.SECONDS)).isTrue
+
+        val record = eventCollector.receivedUserEvents[userId.toString()]
+        assertThat(record).isNotNull
+        assertThat(record!!.key()).isEqualTo(userId.toString())
+    }
+
+    @Test
+    fun `should serialize Instant as ISO 8601 UTC`() {
+        eventCollector.reset(userCount = 1, paymentCount = 0, sessionCount = 0)
+
+        eventProducer.publishUserRegistered(
+            userId = UUID.randomUUID(),
+            email = "test@test.com",
+            keycloakId = "kc-1"
+        )
+
+        assertThat(eventCollector.userLatch.await(10, TimeUnit.SECONDS)).isTrue
+
+        val record = eventCollector.receivedUserEvents.values.first()
+        val json = String(record.value())
+
+        assertThat(json).contains("\"occurred_at\"")
+        val node = objectMapper.readTree(json)
+        val occurredAt = node.get("occurred_at").asText()
+        val parsed = Instant.parse(occurredAt)
+        assertThat(parsed).isNotNull
+    }
+
+    @TestConfiguration
+    class KafkaTestListenerConfig {
+        @Bean
+        fun eventCollector(): EventCollector = EventCollector()
+    }
+}
+
+class EventCollector {
+    val receivedUserEvents = ConcurrentHashMap<String, ConsumerRecord<String, ByteArray>>()
+    val receivedPaymentEvents = ConcurrentHashMap<String, ConsumerRecord<String, ByteArray>>()
+    val receivedSessionEvents = ConcurrentHashMap<String, ConsumerRecord<String, ByteArray>>()
+
+    @Volatile
+    var userLatch = CountDownLatch(0)
+
+    @Volatile
+    var paymentLatch = CountDownLatch(0)
+
+    @Volatile
+    var sessionLatch = CountDownLatch(0)
+
+    fun reset(userCount: Int, paymentCount: Int, sessionCount: Int) {
+        receivedUserEvents.clear()
+        receivedPaymentEvents.clear()
+        receivedSessionEvents.clear()
+        userLatch = CountDownLatch(userCount)
+        paymentLatch = CountDownLatch(paymentCount)
+        sessionLatch = CountDownLatch(sessionCount)
     }
 
     @KafkaListener(topics = [KafkaTopics.USER_EVENTS], groupId = "test-user-events")
@@ -103,254 +368,4 @@ class UserEventProducerTest {
         receivedSessionEvents[record.key()] = record
         sessionLatch.countDown()
     }
-
-    @Test
-    fun `should publish USER_REGISTERED event with correct JSON structure`() {
-        resetLatches(userCount = 1, paymentCount = 0, sessionCount = 0)
-
-        val userId = UUID.randomUUID()
-        eventProducer.publishUserRegistered(
-            userId = userId,
-            email = "alice@example.com",
-            keycloakId = "kc-abc-123"
-        )
-
-        assertThat(userLatch.await(10, TimeUnit.SECONDS)).isTrue
-
-        val record = receivedUserEvents[userId.toString()]
-        assertThat(record).isNotNull
-
-        val json = String(record!!.value())
-        val event = objectMapper.readValue(json, UserRegisteredEvent::class.java)
-
-        assertThat(event.eventId).isNotNull()
-        assertThat(event.occurredAt).isNotNull()
-        assertThat(event.eventType).isEqualTo("USER_REGISTERED")
-        assertThat(event.userId).isEqualTo(userId)
-        assertThat(event.email).isEqualTo("alice@example.com")
-        assertThat(event.keycloakId).isEqualTo("kc-abc-123")
-    }
-
-    @Test
-    fun `should publish USER_ROLE_CHANGED event`() {
-        resetLatches(userCount = 1, paymentCount = 0, sessionCount = 0)
-
-        val targetUserId = UUID.randomUUID()
-        val adminId = UUID.randomUUID()
-
-        eventProducer.publishUserRoleChanged(
-            targetUserId = targetUserId,
-            performedByAdminId = adminId,
-            role = "PREMIUM",
-            action = "ADD"
-        )
-
-        assertThat(userLatch.await(10, TimeUnit.SECONDS)).isTrue
-
-        val record = receivedUserEvents[targetUserId.toString()]
-        val json = String(record!!.value())
-        val event = objectMapper.readValue(json, UserRoleChangedEvent::class.java)
-
-        assertThat(event.eventType).isEqualTo("USER_ROLE_CHANGED")
-        assertThat(event.targetUserId).isEqualTo(targetUserId)
-        assertThat(event.performedByAdminId).isEqualTo(adminId)
-        assertThat(event.role).isEqualTo("PREMIUM")
-        assertThat(event.action).isEqualTo("ADD")
-    }
-
-    @Test
-    fun `should publish BALANCE_LOW event`() {
-        resetLatches(userCount = 1, paymentCount = 0, sessionCount = 0)
-
-        val userId = UUID.randomUUID()
-        eventProducer.publishBalanceLow(
-            userId = userId,
-            currentBalance = BigDecimal("50.00"),
-            threshold = BigDecimal("100.00")
-        )
-
-        assertThat(userLatch.await(10, TimeUnit.SECONDS)).isTrue
-
-        val record = receivedUserEvents[userId.toString()]
-        val json = String(record!!.value())
-        val event = objectMapper.readValue(json, BalanceLowEvent::class.java)
-
-        assertThat(event.eventType).isEqualTo("BALANCE_LOW")
-        assertThat(event.userId).isEqualTo(userId)
-        assertThat(event.currentBalance).isEqualByComparingTo(BigDecimal("50.00"))
-        assertThat(event.threshold).isEqualByComparingTo(BigDecimal("100.00"))
-    }
-
-    @Test
-    fun `should route DEPOSIT to payment-transactions topic`() {
-        resetLatches(userCount = 0, paymentCount = 1, sessionCount = 0)
-
-        val userId = UUID.randomUUID()
-        eventProducer.publishBalanceOperationApplied(
-            userId = userId,
-            transactionId = UUID.randomUUID(),
-            type = "DEPOSIT",
-            amount = BigDecimal("500.00"),
-            newBalance = BigDecimal("650.00")
-        )
-
-        assertThat(paymentLatch.await(10, TimeUnit.SECONDS)).isTrue
-        assertThat(receivedUserEvents).isEmpty()
-        assertThat(receivedSessionEvents).isEmpty()
-
-        val record = receivedPaymentEvents[userId.toString()]
-        assertThat(record).isNotNull
-
-        val event = objectMapper.readValue(record!!.value(), BalanceOperationAppliedEvent::class.java)
-        assertThat(event.type).isEqualTo("DEPOSIT")
-        assertThat(event.amount).isEqualByComparingTo(BigDecimal("500.00"))
-    }
-
-    @Test
-    fun `should route SESSION_DEBIT to session-events topic`() {
-        resetLatches(userCount = 0, paymentCount = 0, sessionCount = 1)
-
-        val userId = UUID.randomUUID()
-        eventProducer.publishBalanceOperationApplied(
-            userId = userId,
-            transactionId = UUID.randomUUID(),
-            type = "SESSION_DEBIT",
-            amount = BigDecimal("-100.00"),
-            newBalance = BigDecimal("400.00")
-        )
-
-        assertThat(sessionLatch.await(10, TimeUnit.SECONDS)).isTrue
-        assertThat(receivedUserEvents).isEmpty()
-        assertThat(receivedPaymentEvents).isEmpty()
-
-        val record = receivedSessionEvents[userId.toString()]
-        assertThat(record).isNotNull
-
-        val event = objectMapper.readValue(record!!.value(), BalanceOperationAppliedEvent::class.java)
-        assertThat(event.type).isEqualTo("SESSION_DEBIT")
-        assertThat(event.amount).isEqualByComparingTo(BigDecimal("-100.00"))
-    }
-
-    @Test
-    fun `should route REFUND to session-events topic`() {
-        resetLatches(userCount = 0, paymentCount = 0, sessionCount = 1)
-
-        val userId = UUID.randomUUID()
-        eventProducer.publishBalanceOperationApplied(
-            userId = userId,
-            transactionId = UUID.randomUUID(),
-            type = "REFUND",
-            amount = BigDecimal("100.00"),
-            newBalance = BigDecimal("500.00")
-        )
-
-        assertThat(sessionLatch.await(10, TimeUnit.SECONDS)).isTrue
-
-        val record = receivedSessionEvents[userId.toString()]
-        val event = objectMapper.readValue(record!!.value(), BalanceOperationAppliedEvent::class.java)
-        assertThat(event.type).isEqualTo("REFUND")
-    }
-
-    @Test
-    fun `should route BONUS to user-events topic`() {
-        resetLatches(userCount = 1, paymentCount = 0, sessionCount = 0)
-
-        val userId = UUID.randomUUID()
-        eventProducer.publishBalanceOperationApplied(
-            userId = userId,
-            transactionId = UUID.randomUUID(),
-            type = "BONUS",
-            amount = BigDecimal("50.00"),
-            newBalance = BigDecimal("150.00")
-        )
-
-        assertThat(userLatch.await(10, TimeUnit.SECONDS)).isTrue
-        assertThat(receivedPaymentEvents).isEmpty()
-        assertThat(receivedSessionEvents).isEmpty()
-
-        val record = receivedUserEvents[userId.toString()]
-        val event = objectMapper.readValue(record!!.value(), BalanceOperationAppliedEvent::class.java)
-        assertThat(event.type).isEqualTo("BONUS")
-    }
-
-    @Test
-    fun `should route ADMIN_ADJUSTMENT to user-events topic`() {
-        resetLatches(userCount = 1, paymentCount = 0, sessionCount = 0)
-
-        val userId = UUID.randomUUID()
-        eventProducer.publishBalanceOperationApplied(
-            userId = userId,
-            transactionId = UUID.randomUUID(),
-            type = "ADMIN_ADJUSTMENT",
-            amount = BigDecimal("1000.00"),
-            newBalance = BigDecimal("1100.00")
-        )
-
-        assertThat(userLatch.await(10, TimeUnit.SECONDS)).isTrue
-
-        val record = receivedUserEvents[userId.toString()]
-        val event = objectMapper.readValue(record!!.value(), BalanceOperationAppliedEvent::class.java)
-        assertThat(event.type).isEqualTo("ADMIN_ADJUSTMENT")
-    }
-
-    @Test
-    fun `should include event_type header in all events`() {
-        resetLatches(userCount = 1, paymentCount = 0, sessionCount = 0)
-
-        eventProducer.publishUserRegistered(
-            userId = UUID.randomUUID(),
-            email = "test@test.com",
-            keycloakId = "kc-1"
-        )
-
-        assertThat(userLatch.await(10, TimeUnit.SECONDS)).isTrue
-
-        val record = receivedUserEvents.values.firstOrNull()
-        assertThat(record).isNotNull
-        assertThat(record!!.headers().lastHeader("event_type")).isNotNull
-        val headerValue = String(record.headers().lastHeader("event_type")!!.value())
-        assertThat(headerValue).isEqualTo("USER_REGISTERED")
-    }
-
-    @Test
-    fun `should use userId as Kafka key for partitioning`() {
-        resetLatches(userCount = 1, paymentCount = 0, sessionCount = 0)
-
-        val userId = UUID.randomUUID()
-        eventProducer.publishUserRegistered(
-            userId = userId,
-            email = "test@test.com",
-            keycloakId = "kc-1"
-        )
-
-        assertThat(userLatch.await(10, TimeUnit.SECONDS)).isTrue
-
-        val record = receivedUserEvents[userId.toString()]
-        assertThat(record).isNotNull
-        assertThat(record!!.key()).isEqualTo(userId.toString())
-    }
-
-    @Test
-    fun `should serialize Instant as ISO 8601 UTC`() {
-        resetLatches(userCount = 1, paymentCount = 0, sessionCount = 0)
-
-        eventProducer.publishUserRegistered(
-            userId = UUID.randomUUID(),
-            email = "test@test.com",
-            keycloakId = "kc-1"
-        )
-
-        assertThat(userLatch.await(10, TimeUnit.SECONDS)).isTrue
-
-        val record = receivedUserEvents.values.first()
-        val json = String(record.value())
-
-        assertThat(json).contains("\"occurred_at\"")
-        val node = objectMapper.readTree(json)
-        val occurredAt = node.get("occurred_at").asText()
-        val parsed = Instant.parse(occurredAt)
-        assertThat(parsed).isNotNull
-    }
 }
-
-private fun ConsumerRecord<String, ByteArray>.recordValue(): ByteArray = this.value()

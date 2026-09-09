@@ -54,13 +54,20 @@ spring:
 
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    admin:
+      fail-fast: true
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
       acks: all
+      retries: 2147483647
+      batch-size: 16384
       properties:
         enable.idempotence: true
         max.in.flight.requests.per.connection: 5
+        delivery.timeout.ms: 120000
+        request.timeout.ms: 30000
+        linger.ms: 5
     consumer:
       group-id: ${spring.application.name}
       auto-offset-reset: earliest

@@ -12,9 +12,9 @@ app:
   security:
     internal-secret: test-secret-12345
   kafka:
+    auto-create-topics: false
     topics:
       user-events: user-events
-      auto-create-topics: false
   cache:
     user-profile-ttl: 5m
     user-exists-ttl: 24h

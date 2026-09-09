@@ -1,8 +1,8 @@
 package com.cloudgaming.userservice.events
 
+import com.cloudgaming.userservice.config.KafkaTopicsProperties
 import com.cloudgaming.userservice.constants.HeaderNames
 import com.cloudgaming.userservice.constants.KafkaEventTypes
-import com.cloudgaming.userservice.constants.KafkaTopics
 import com.cloudgaming.userservice.domain.TransactionType
 import com.cloudgaming.userservice.dto.BalanceLowEvent
 import com.cloudgaming.userservice.dto.BalanceOperationAppliedEvent
@@ -14,12 +14,15 @@ import org.springframework.kafka.support.KafkaHeaders
 import org.springframework.messaging.Message
 import org.springframework.messaging.support.MessageBuilder
 import org.springframework.stereotype.Service
+import org.springframework.transaction.support.TransactionSynchronization
+import org.springframework.transaction.support.TransactionSynchronizationManager
 import java.math.BigDecimal
 import java.util.*
 
 @Service
 class UserEventProducer(
-    private val kafkaTemplate: KafkaTemplate<String, Any>
+    private val kafkaTemplate: KafkaTemplate<String, Any>,
+    private val topics: KafkaTopicsProperties
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
 
@@ -30,7 +33,7 @@ class UserEventProducer(
             keycloakId = keycloakId
         )
         sendEvent(
-            topic = KafkaTopics.USER_EVENTS,
+            topic = topics.userEvents,
             key = userId.toString(),
             event = event,
             eventName = KafkaEventTypes.USER_REGISTERED
@@ -50,7 +53,7 @@ class UserEventProducer(
             action = action
         )
         sendEvent(
-            topic = KafkaTopics.USER_EVENTS,
+            topic = topics.userEvents,
             key = targetUserId.toString(),
             event = event,
             eventName = KafkaEventTypes.USER_ROLE_CHANGED
@@ -64,7 +67,7 @@ class UserEventProducer(
             threshold = threshold
         )
         sendEvent(
-            topic = KafkaTopics.USER_EVENTS,
+            topic = topics.userEvents,
             key = userId.toString(),
             event = event,
             eventName = KafkaEventTypes.BALANCE_LOW
@@ -87,9 +90,9 @@ class UserEventProducer(
         )
 
         val topic = when (type) {
-            TransactionType.DEPOSIT.name -> KafkaTopics.PAYMENT_TRANSACTIONS
-            TransactionType.SESSION_DEBIT.name, TransactionType.REFUND.name -> KafkaTopics.SESSION_EVENTS
-            else -> KafkaTopics.USER_EVENTS
+            TransactionType.DEPOSIT.name -> topics.paymentTransactions
+            TransactionType.SESSION_DEBIT.name, TransactionType.REFUND.name -> topics.sessionEvents
+            else -> topics.userEvents
         }
 
         sendEvent(
@@ -113,6 +116,18 @@ class UserEventProducer(
             .setHeader(HeaderNames.EVENT_TYPE, eventName)
             .build()
 
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
+                override fun afterCommit() {
+                    doSend(message, topic, eventName)
+                }
+            })
+        } else {
+            doSend(message, topic, eventName)
+        }
+    }
+
+    private fun doSend(message: Message<Any>, topic: String, eventName: String) {
         kafkaTemplate.send(message).whenComplete { result, ex ->
             if (ex != null) {
                 logger.error(
