@@ -240,8 +240,8 @@ class EndToEndUserFlowTest {
         @Test
         @DisplayName("USER_REGISTERED event should be published on first login")
         fun `USER_REGISTERED event should be published on first login`() {
-            userEventCollector.reset(1)
             val keycloakId = "kc-event-${UUID.randomUUID()}"
+            userEventCollector.reset(1, keycloakId)
             val token = "test-token-$keycloakId"
             val email = "new-$keycloakId@test.com"
             mockJwtDecoder(buildJwt(keycloakId, email = email))
@@ -377,15 +377,23 @@ class UserEventCollector {
     val receivedEvents = ConcurrentHashMap<String, ConsumerRecord<String, ByteArray>>()
 
     @Volatile
+    private var expectedKeycloakId: String? = null
+
+    @Volatile
     var latch = CountDownLatch(0)
 
-    fun reset(expectedCount: Int) {
+    fun reset(expectedCount: Int, keycloakId: String? = null) {
         receivedEvents.clear()
+        expectedKeycloakId = keycloakId
         latch = CountDownLatch(expectedCount)
     }
 
     @KafkaListener(topics = [KafkaTopics.USER_EVENTS], groupId = "test-e2e-user-events")
     fun listen(record: ConsumerRecord<String, ByteArray>) {
+        val keycloakId = expectedKeycloakId
+        if (keycloakId != null && !String(record.value()).contains(keycloakId)) {
+            return
+        }
         receivedEvents[record.key()] = record
         latch.countDown()
     }
