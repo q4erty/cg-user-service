@@ -33,6 +33,7 @@ import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 import org.redisson.api.RLock
 import org.redisson.api.RedissonClient
+import org.springframework.cache.CacheManager
 import org.springframework.data.redis.core.StringRedisTemplate
 import org.springframework.data.redis.core.ValueOperations
 import org.springframework.orm.ObjectOptimisticLockingFailureException
@@ -65,6 +66,9 @@ class BalanceServiceUnitTest {
     private lateinit var eventProducer: UserEventProducer
 
     @Mock
+    private lateinit var cacheManager: CacheManager
+
+    @Mock
     private lateinit var lock: RLock
 
     private val objectMapper: ObjectMapper = ObjectMapper().apply {
@@ -86,6 +90,7 @@ class BalanceServiceUnitTest {
             stringRedisTemplate,
             eventProducer,
             objectMapper,
+            cacheManager,
             BigDecimal("100.00")
         )
 

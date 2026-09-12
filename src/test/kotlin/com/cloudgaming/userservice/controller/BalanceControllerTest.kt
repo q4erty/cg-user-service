@@ -152,6 +152,8 @@ class BalanceControllerTest {
                 .with(playerJwt())
         )
             .andExpect(status().isOk)
+
+        org.mockito.kotlin.verify(balanceQueryService).getTransactionHistory(testUserId, 2, 5, "createdAt,asc")
     }
 
     @Test
