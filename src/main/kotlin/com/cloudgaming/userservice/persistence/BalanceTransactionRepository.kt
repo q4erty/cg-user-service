@@ -17,6 +17,10 @@ interface BalanceTransactionRepository : JpaRepository<BalanceTransaction, UUID>
 
     fun findByUserIdOrderByCreatedAtDesc(userId: UUID, pageable: Pageable): Page<BalanceTransaction>
 
+    fun findByUserId(userId: UUID, pageable: Pageable): Page<BalanceTransaction>
+
+    fun findByIdAndUserId(id: UUID, userId: UUID): BalanceTransaction?
+
     fun findByIdempotencyKey(idempotencyKey: String): BalanceTransaction?
 
     fun existsByIdempotencyKey(idempotencyKey: String): Boolean

@@ -14,6 +14,8 @@ enum class ErrorCode(val code: String, val defaultMessage: String) {
     INSUFFICIENT_FUNDS("INSUFFICIENT_FUNDS", "Insufficient funds"),
     IDEMPOTENCY_CONFLICT("IDEMPOTENCY_CONFLICT", "Idempotency conflict"),
     CONCURRENT_OPERATION("CONCURRENT_OPERATION", "Concurrent operation in progress, retry later"),
+    TRANSACTION_NOT_FOUND("TRANSACTION_NOT_FOUND", "Transaction not found"),
+    INVALID_PARAMETER("INVALID_PARAMETER", "Invalid request parameter"),
     KEYCLOAK_UNAVAILABLE("KEYCLOAK_UNAVAILABLE", "Identity provider is temporarily unavailable"),
     INTERNAL_ERROR("INTERNAL_ERROR", "An unexpected error occurred")
 }

@@ -333,6 +333,36 @@ class GlobalExceptionHandler : ResponseEntityExceptionHandler() {
             )
     }
 
+    @ExceptionHandler(TransactionNotFoundException::class)
+    fun handleTransactionNotFound(
+        ex: TransactionNotFoundException,
+        request: HttpServletRequest
+    ): ResponseEntity<ErrorResponse> {
+        logger.warn("Transaction not found: {}", ex.message)
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(
+            ErrorResponse(
+                error = ErrorCode.TRANSACTION_NOT_FOUND.code,
+                message = ex.message ?: ErrorCode.TRANSACTION_NOT_FOUND.defaultMessage,
+                path = request.requestURI
+            )
+        )
+    }
+
+    @ExceptionHandler(IllegalArgumentException::class)
+    fun handleIllegalArgument(
+        ex: IllegalArgumentException,
+        request: HttpServletRequest
+    ): ResponseEntity<ErrorResponse> {
+        logger.warn("Invalid request parameter: {}", ex.message)
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(
+            ErrorResponse(
+                error = ErrorCode.INVALID_PARAMETER.code,
+                message = ex.message ?: ErrorCode.INVALID_PARAMETER.defaultMessage,
+                path = request.requestURI
+            )
+        )
+    }
+
     @ExceptionHandler(KeycloakApiException::class)
     fun handleKeycloakApi(
         ex: KeycloakApiException,
