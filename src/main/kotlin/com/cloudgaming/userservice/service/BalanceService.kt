@@ -19,6 +19,7 @@ import io.github.resilience4j.retry.annotation.Retry
 import org.redisson.api.RedissonClient
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
+import org.springframework.cache.CacheManager
 import org.springframework.data.redis.core.StringRedisTemplate
 import org.springframework.orm.ObjectOptimisticLockingFailureException
 import org.springframework.stereotype.Service
@@ -40,6 +41,7 @@ class BalanceService(
     private val stringRedisTemplate: StringRedisTemplate,
     private val eventProducer: UserEventProducer,
     private val objectMapper: ObjectMapper,
+    private val cacheManager: CacheManager,
     @Value("\${app.balance.low-threshold:100.00}") private val lowThreshold: BigDecimal
 ) {
 
@@ -127,6 +129,7 @@ class BalanceService(
             )
 
             scheduleCacheWrite(redisKey, userId, request, response)
+            scheduleBalanceCacheEviction(userId)
 
             eventProducer.publishBalanceOperationApplied(
                 userId = userId,
@@ -198,6 +201,24 @@ class BalanceService(
         } else {
             cacheResult(redisKey, userId, request, response)
         }
+    }
+
+    // Evicts the short-TTL BalanceQueryService.getBalance cache entry so reads right after
+    // an operation don't return a stale amount for up to the cache's TTL.
+    private fun scheduleBalanceCacheEviction(userId: UUID) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
+                override fun afterCommit() {
+                    evictBalanceCache(userId)
+                }
+            })
+        } else {
+            evictBalanceCache(userId)
+        }
+    }
+
+    private fun evictBalanceCache(userId: UUID) {
+        cacheManager.getCache(BalanceQueryService.CACHE_NAME)?.evict(userId)
     }
 
     private fun cacheResult(

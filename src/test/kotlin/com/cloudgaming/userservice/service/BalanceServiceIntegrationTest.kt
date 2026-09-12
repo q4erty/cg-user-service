@@ -302,6 +302,28 @@ class BalanceServiceIntegrationTest {
     }
 
     @Nested
+    @DisplayName("user_balance cache eviction")
+    inner class BalanceCacheEviction {
+
+        @Autowired
+        private lateinit var balanceQueryService: BalanceQueryService
+
+        @Test
+        @DisplayName("getBalance reflects the new amount after applyOperation commits, even though it was cached")
+        fun `should evict cached balance after a successful operation`() {
+            seedBalance(BigDecimal("500.00"))
+
+            val initial = balanceQueryService.getBalance(userId)
+            assertThat(initial.amount).isEqualByComparingTo(BigDecimal("500.00"))
+
+            balanceService.applyOperation(userId, depositRequest(BigDecimal("50.00")))
+
+            val refreshed = balanceQueryService.getBalance(userId)
+            assertThat(refreshed.amount).isEqualByComparingTo(BigDecimal("550.00"))
+        }
+    }
+
+    @Nested
     @DisplayName("Optimistic locking retry")
     inner class OptimisticLockRetry {
 

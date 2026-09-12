@@ -22,6 +22,15 @@ class CacheConfig {
         val cacheManager = CaffeineCacheManager()
         cacheManager.setCaffeine(caffeine)
         cacheManager.setCacheNames(listOf("user_profile"))
+
+        cacheManager.registerCustomCache(
+            "user_balance",
+            Caffeine.newBuilder()
+                .expireAfterWrite(1, TimeUnit.MINUTES)
+                .maximumSize(10_000)
+                .recordStats()
+                .build()
+        )
         return cacheManager
     }
 }
