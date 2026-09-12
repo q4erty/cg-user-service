@@ -75,6 +75,7 @@ class BalanceServiceUnitTest {
     private lateinit var balanceService: BalanceService
 
     private val userId = UUID.randomUUID()
+    private val sessionId = UUID.randomUUID()
 
     @BeforeEach
     fun setUp() {
@@ -166,6 +167,12 @@ class BalanceServiceUnitTest {
         @Test
         fun `should return cached response without touching repositories on replay`() {
             val idempotencyKey = "replay-key"
+            val originalRequest = request(
+                type = TransactionType.SESSION_DEBIT,
+                amount = BigDecimal("100.00"),
+                idempotencyKey = idempotencyKey,
+                sessionId = sessionId
+            )
             val cachedResponse = BalanceOperationResponse(
                 transactionId = UUID.randomUUID(),
                 newBalance = BigDecimal("400.00"),
@@ -173,16 +180,12 @@ class BalanceServiceUnitTest {
                 processedAt = Instant.parse("2024-01-01T00:00:00Z")
             )
             val cached = CachedIdempotentResult(
-                type = TransactionType.SESSION_DEBIT,
-                amount = BigDecimal("100.00"),
+                fingerprint = CachedIdempotentResult.fingerprintOf(userId, originalRequest),
                 response = cachedResponse
             )
             whenever(valueOperations.get(any())).thenReturn(objectMapper.writeValueAsString(cached))
 
-            val response = balanceService.applyOperation(
-                userId,
-                request(type = TransactionType.SESSION_DEBIT, amount = BigDecimal("100.00"), idempotencyKey = idempotencyKey)
-            )
+            val response = balanceService.applyOperation(userId, originalRequest)
 
             assertThat(response).isEqualTo(cachedResponse)
             verify(userBalanceRepository, never()).findByUserId(any())
@@ -192,6 +195,12 @@ class BalanceServiceUnitTest {
         @Test
         fun `should throw IdempotencyConflictException when same key used with different amount`() {
             val idempotencyKey = "conflict-key"
+            val originalRequest = request(
+                type = TransactionType.SESSION_DEBIT,
+                amount = BigDecimal("100.00"),
+                idempotencyKey = idempotencyKey,
+                sessionId = sessionId
+            )
             val cachedResponse = BalanceOperationResponse(
                 transactionId = UUID.randomUUID(),
                 newBalance = BigDecimal("400.00"),
@@ -199,8 +208,7 @@ class BalanceServiceUnitTest {
                 processedAt = Instant.parse("2024-01-01T00:00:00Z")
             )
             val cached = CachedIdempotentResult(
-                type = TransactionType.SESSION_DEBIT,
-                amount = BigDecimal("100.00"),
+                fingerprint = CachedIdempotentResult.fingerprintOf(userId, originalRequest),
                 response = cachedResponse
             )
             whenever(valueOperations.get(any())).thenReturn(objectMapper.writeValueAsString(cached))
@@ -211,11 +219,158 @@ class BalanceServiceUnitTest {
                     request(
                         type = TransactionType.SESSION_DEBIT,
                         amount = BigDecimal("200.00"),
-                        idempotencyKey = idempotencyKey
+                        idempotencyKey = idempotencyKey,
+                        sessionId = sessionId
                     )
                 )
             }.isInstanceOf(IdempotencyConflictException::class.java)
 
+            verify(userBalanceRepository, never()).findByUserId(any())
+        }
+
+        @Test
+        fun `should throw IdempotencyConflictException when same key used with different sessionId`() {
+            val idempotencyKey = "conflict-session-key"
+            val originalRequest = request(
+                type = TransactionType.SESSION_DEBIT,
+                amount = BigDecimal("100.00"),
+                idempotencyKey = idempotencyKey,
+                sessionId = sessionId
+            )
+            val cachedResponse = BalanceOperationResponse(
+                transactionId = UUID.randomUUID(),
+                newBalance = BigDecimal("400.00"),
+                currency = "KZT",
+                processedAt = Instant.parse("2024-01-01T00:00:00Z")
+            )
+            val cached = CachedIdempotentResult(
+                fingerprint = CachedIdempotentResult.fingerprintOf(userId, originalRequest),
+                response = cachedResponse
+            )
+            whenever(valueOperations.get(any())).thenReturn(objectMapper.writeValueAsString(cached))
+
+            assertThatThrownBy {
+                balanceService.applyOperation(
+                    userId,
+                    request(
+                        type = TransactionType.SESSION_DEBIT,
+                        amount = BigDecimal("100.00"),
+                        idempotencyKey = idempotencyKey,
+                        sessionId = UUID.randomUUID()
+                    )
+                )
+            }.isInstanceOf(IdempotencyConflictException::class.java)
+
+            verify(userBalanceRepository, never()).findByUserId(any())
+        }
+
+        @Test
+        fun `should throw IdempotencyConflictException when same key used with different paymentId`() {
+            val idempotencyKey = "conflict-payment-key"
+            val originalRequest = BalanceOperationRequest(
+                type = TransactionType.DEPOSIT,
+                amount = BigDecimal("100.00"),
+                idempotencyKey = idempotencyKey,
+                paymentId = UUID.randomUUID()
+            )
+            val cachedResponse = BalanceOperationResponse(
+                transactionId = UUID.randomUUID(),
+                newBalance = BigDecimal("400.00"),
+                currency = "KZT",
+                processedAt = Instant.parse("2024-01-01T00:00:00Z")
+            )
+            val cached = CachedIdempotentResult(
+                fingerprint = CachedIdempotentResult.fingerprintOf(userId, originalRequest),
+                response = cachedResponse
+            )
+            whenever(valueOperations.get(any())).thenReturn(objectMapper.writeValueAsString(cached))
+
+            assertThatThrownBy {
+                balanceService.applyOperation(
+                    userId,
+                    BalanceOperationRequest(
+                        type = TransactionType.DEPOSIT,
+                        amount = BigDecimal("100.00"),
+                        idempotencyKey = idempotencyKey,
+                        paymentId = UUID.randomUUID()
+                    )
+                )
+            }.isInstanceOf(IdempotencyConflictException::class.java)
+
+            verify(userBalanceRepository, never()).findByUserId(any())
+        }
+
+        @Test
+        fun `should throw IdempotencyConflictException when same key used with different description`() {
+            val idempotencyKey = "conflict-description-key"
+            val paymentId = UUID.randomUUID()
+            val originalRequest = BalanceOperationRequest(
+                type = TransactionType.DEPOSIT,
+                amount = BigDecimal("100.00"),
+                idempotencyKey = idempotencyKey,
+                paymentId = paymentId,
+                description = "first top-up"
+            )
+            val cachedResponse = BalanceOperationResponse(
+                transactionId = UUID.randomUUID(),
+                newBalance = BigDecimal("400.00"),
+                currency = "KZT",
+                processedAt = Instant.parse("2024-01-01T00:00:00Z")
+            )
+            val cached = CachedIdempotentResult(
+                fingerprint = CachedIdempotentResult.fingerprintOf(userId, originalRequest),
+                response = cachedResponse
+            )
+            whenever(valueOperations.get(any())).thenReturn(objectMapper.writeValueAsString(cached))
+
+            assertThatThrownBy {
+                balanceService.applyOperation(
+                    userId,
+                    BalanceOperationRequest(
+                        type = TransactionType.DEPOSIT,
+                        amount = BigDecimal("100.00"),
+                        idempotencyKey = idempotencyKey,
+                        paymentId = paymentId,
+                        description = "different description"
+                    )
+                )
+            }.isInstanceOf(IdempotencyConflictException::class.java)
+
+            verify(userBalanceRepository, never()).findByUserId(any())
+        }
+
+        @Test
+        fun `should return cached response when identical operation is replayed with same sessionId`() {
+            val idempotencyKey = "replay-same-session-key"
+            val originalRequest = request(
+                type = TransactionType.SESSION_DEBIT,
+                amount = BigDecimal("100.00"),
+                idempotencyKey = idempotencyKey,
+                sessionId = sessionId
+            )
+            val cachedResponse = BalanceOperationResponse(
+                transactionId = UUID.randomUUID(),
+                newBalance = BigDecimal("400.00"),
+                currency = "KZT",
+                processedAt = Instant.parse("2024-01-01T00:00:00Z")
+            )
+            val cached = CachedIdempotentResult(
+                fingerprint = CachedIdempotentResult.fingerprintOf(userId, originalRequest),
+                response = cachedResponse
+            )
+            whenever(valueOperations.get(any())).thenReturn(objectMapper.writeValueAsString(cached))
+
+            val response = balanceService.applyOperation(
+                userId,
+                request(
+                    type = TransactionType.SESSION_DEBIT,
+                    amount = BigDecimal("100.00"),
+                    idempotencyKey = idempotencyKey,
+                    sessionId = sessionId
+                )
+            )
+
+            assertThat(response).isEqualTo(cachedResponse)
             verify(userBalanceRepository, never()).findByUserId(any())
         }
     }

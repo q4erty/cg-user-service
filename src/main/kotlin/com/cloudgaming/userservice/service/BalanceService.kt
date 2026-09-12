@@ -48,9 +48,9 @@ class BalanceService(
     @Retry(name = "balance-optimistic-lock", fallbackMethod = "recoverFromOptimisticLockFailure")
     @Transactional(isolation = Isolation.READ_COMMITTED)
     fun applyOperation(userId: UUID, request: BalanceOperationRequest): BalanceOperationResponse {
-        val redisKey = RedisKey.BALANCE_IDEMPOTENCY_PREFIX + sha256(request.idempotencyKey)
+        val redisKey = RedisKey.BALANCE_IDEMPOTENCY_PREFIX + sha256("$userId:${request.idempotencyKey}")
 
-        tryGetCachedResult(redisKey, request)?.let { return it }
+        tryGetCachedResult(redisKey, userId, request)?.let { return it }
 
         stringRedisTemplate.opsForValue().setIfAbsent(
             redisKey,
@@ -82,7 +82,7 @@ class BalanceService(
         }
 
         try {
-            tryGetCachedResult(redisKey, request)?.let { return it }
+            tryGetCachedResult(redisKey, userId, request)?.let { return it }
 
             val type = request.type
 
@@ -126,7 +126,7 @@ class BalanceService(
                 processedAt = Instant.now()
             )
 
-            scheduleCacheWrite(redisKey, request, response)
+            scheduleCacheWrite(redisKey, userId, request, response)
 
             eventProducer.publishBalanceOperationApplied(
                 userId = userId,
@@ -165,14 +165,18 @@ class BalanceService(
         )
     }
 
-    private fun tryGetCachedResult(redisKey: String, request: BalanceOperationRequest): BalanceOperationResponse? {
+    private fun tryGetCachedResult(
+        redisKey: String,
+        userId: UUID,
+        request: BalanceOperationRequest
+    ): BalanceOperationResponse? {
         val raw = stringRedisTemplate.opsForValue().get(redisKey) ?: return null
         if (raw == RedisKey.BALANCE_PENDING_MARKER) {
             return null
         }
 
         val cached: CachedIdempotentResult = objectMapper.readValue(raw, CachedIdempotentResult::class.java)
-        if (cached.type == request.type && cached.amount.compareTo(request.amount) == 0) {
+        if (cached.matches(userId, request)) {
             return cached.response
         }
 
@@ -181,22 +185,31 @@ class BalanceService(
 
     private fun scheduleCacheWrite(
         redisKey: String,
+        userId: UUID,
         request: BalanceOperationRequest,
         response: BalanceOperationResponse
     ) {
         if (TransactionSynchronizationManager.isSynchronizationActive()) {
             TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
                 override fun afterCommit() {
-                    cacheResult(redisKey, request, response)
+                    cacheResult(redisKey, userId, request, response)
                 }
             })
         } else {
-            cacheResult(redisKey, request, response)
+            cacheResult(redisKey, userId, request, response)
         }
     }
 
-    private fun cacheResult(redisKey: String, request: BalanceOperationRequest, response: BalanceOperationResponse) {
-        val cached = CachedIdempotentResult(type = request.type, amount = request.amount, response = response)
+    private fun cacheResult(
+        redisKey: String,
+        userId: UUID,
+        request: BalanceOperationRequest,
+        response: BalanceOperationResponse
+    ) {
+        val cached = CachedIdempotentResult(
+            fingerprint = CachedIdempotentResult.fingerprintOf(userId, request),
+            response = response
+        )
         val json = objectMapper.writeValueAsString(cached)
         stringRedisTemplate.opsForValue().set(redisKey, json, RedisKey.BALANCE_IDEMPOTENCY_TTL)
     }
