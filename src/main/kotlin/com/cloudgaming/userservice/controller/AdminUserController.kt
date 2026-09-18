@@ -24,6 +24,8 @@ import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.validation.Valid
 import jakarta.validation.constraints.Max
 import jakarta.validation.constraints.Min
+import jakarta.validation.constraints.NotBlank
+import jakarta.validation.constraints.Size
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.PageRequest
 import org.springframework.data.domain.Sort
@@ -162,7 +164,10 @@ class AdminUserController(
     fun adjustBalance(
         @PathVariable id: UUID,
         @RequestBody @Valid request: BalanceAdjustRequest,
-        @RequestHeader(HeaderNames.IDEMPOTENCY_KEY) idempotencyKey: String
+        @RequestHeader("X-Idempotency-Key")
+        @NotBlank(message = "Idempotency key is required")
+        @Size(max = 255, message = "Idempotency key must not exceed 255 characters")
+        idempotencyKey: String
     ): ResponseEntity<BalanceOperationResponse> {
         val adminId = securityUtils.getCurrentUserId()
 
