@@ -25,7 +25,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
-import org.assertj.core.api.Assertions
+import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
@@ -41,8 +41,12 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors
 import org.springframework.test.context.bean.override.mockito.MockitoBean
 import org.springframework.test.web.servlet.MockMvc
-import org.springframework.test.web.servlet.request.MockMvcRequestBuilders
-import org.springframework.test.web.servlet.result.MockMvcResultMatchers
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers.header
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import java.math.BigDecimal
 import java.time.Instant
 import java.util.*
@@ -148,12 +152,12 @@ class AdminUserControllerTest {
                 )
 
             mockMvc.perform(
-                MockMvcRequestBuilders.patch("/api/v1/admin/users/$userId/role")
+                patch("/api/v1/admin/users/$userId/role")
                     .contentType("application/json")
                     .content(objectMapper.writeValueAsString(roleUpdateRequest))
                     .with(adminJwt())
             )
-                .andExpect(MockMvcResultMatchers.status().isNoContent)
+                .andExpect(status().isNoContent)
 
             verify(roleManagementService).assignRole(userId, Role.PREMIUM, adminUserId)
         }
@@ -164,12 +168,12 @@ class AdminUserControllerTest {
             val roleUpdateRequest = RoleUpdateRequest(role = "PREMIUM", action = "ADD")
 
             mockMvc.perform(
-                MockMvcRequestBuilders.patch("/api/v1/admin/users/$userId/role")
+                patch("/api/v1/admin/users/$userId/role")
                     .contentType("application/json")
                     .content(objectMapper.writeValueAsString(roleUpdateRequest))
                     .with(playerJwt())
             )
-                .andExpect(MockMvcResultMatchers.status().isForbidden)
+                .andExpect(status().isForbidden)
 
             verify(roleManagementService, never()).assignRole(any(), any(), any())
         }
@@ -180,13 +184,13 @@ class AdminUserControllerTest {
             val roleUpdateRequest = RoleUpdateRequest(role = "SUPERADMIN", action = "ADD")
 
             mockMvc.perform(
-                MockMvcRequestBuilders.patch("/api/v1/admin/users/$userId/role")
+                patch("/api/v1/admin/users/$userId/role")
                     .contentType("application/json")
                     .content(objectMapper.writeValueAsString(roleUpdateRequest))
                     .with(adminJwt())
             )
-                .andExpect(MockMvcResultMatchers.status().isBadRequest)
-                .andExpect(MockMvcResultMatchers.jsonPath("$.error").value("VALIDATION_ERROR"))
+                .andExpect(status().isBadRequest)
+                .andExpect(jsonPath("$.error").value("VALIDATION_ERROR"))
 
             verify(roleManagementService, never()).assignRole(any(), any(), any())
         }
@@ -197,12 +201,12 @@ class AdminUserControllerTest {
             val roleUpdateRequest = RoleUpdateRequest(role = "PREMIUM", action = "TOGGLE")
 
             mockMvc.perform(
-                MockMvcRequestBuilders.patch("/api/v1/admin/users/$userId/role")
+                patch("/api/v1/admin/users/$userId/role")
                     .contentType("application/json")
                     .content(objectMapper.writeValueAsString(roleUpdateRequest))
                     .with(adminJwt())
             )
-                .andExpect(MockMvcResultMatchers.status().isBadRequest)
+                .andExpect(status().isBadRequest)
 
             verify(roleManagementService, never()).assignRole(any(), any(), any())
         }
@@ -216,13 +220,13 @@ class AdminUserControllerTest {
                 .doThrow(UserNotFoundException.byUserId(userId))
 
             mockMvc.perform(
-                MockMvcRequestBuilders.patch("/api/v1/admin/users/$userId/role")
+                patch("/api/v1/admin/users/$userId/role")
                     .contentType("application/json")
                     .content(objectMapper.writeValueAsString(roleUpdateRequest))
                     .with(adminJwt())
             )
-                .andExpect(MockMvcResultMatchers.status().isNotFound)
-                .andExpect(MockMvcResultMatchers.jsonPath("$.error").value("USER_NOT_FOUND"))
+                .andExpect(status().isNotFound)
+                .andExpect(jsonPath("$.error").value("USER_NOT_FOUND"))
 
             verify(roleManagementService).assignRole(userId, Role.PREMIUM, adminUserId)
         }
@@ -236,14 +240,14 @@ class AdminUserControllerTest {
                 .doThrow(KeycloakApiException("Keycloak is currently unavailable"))
 
             mockMvc.perform(
-                MockMvcRequestBuilders.patch("/api/v1/admin/users/$userId/role")
+                patch("/api/v1/admin/users/$userId/role")
                     .contentType("application/json")
                     .content(objectMapper.writeValueAsString(roleUpdateRequest))
                     .with(adminJwt())
             )
-                .andExpect(MockMvcResultMatchers.status().isServiceUnavailable)
-                .andExpect(MockMvcResultMatchers.jsonPath("$.error").value("KEYCLOAK_UNAVAILABLE"))
-                .andExpect(MockMvcResultMatchers.header().string(HttpHeaders.RETRY_AFTER, "30"))
+                .andExpect(status().isServiceUnavailable)
+                .andExpect(jsonPath("$.error").value("KEYCLOAK_UNAVAILABLE"))
+                .andExpect(header().string(HttpHeaders.RETRY_AFTER, "30"))
 
             verify(roleManagementService).assignRole(userId, Role.PREMIUM, adminUserId)
         }
@@ -255,12 +259,12 @@ class AdminUserControllerTest {
 
             // Так как @Pattern в DTO не пропустит "INTERNAL", метод контроллера не вызовется
             mockMvc.perform(
-                MockMvcRequestBuilders.patch("/api/v1/admin/users/$userId/role")
+                patch("/api/v1/admin/users/$userId/role")
                     .contentType("application/json")
                     .content(objectMapper.writeValueAsString(roleUpdateRequest))
                     .with(adminJwt())
             )
-                .andExpect(MockMvcResultMatchers.status().isBadRequest)
+                .andExpect(status().isBadRequest)
 
             verify(roleManagementService, never()).assignRole(any(), any(), any())
         }
@@ -270,12 +274,12 @@ class AdminUserControllerTest {
             val userId = UUID.randomUUID()
 
             mockMvc.perform(
-                MockMvcRequestBuilders.patch("/api/v1/admin/users/$userId/role")
+                patch("/api/v1/admin/users/$userId/role")
                     .contentType("application/json")
                     .content("{}")
                     .with(adminJwt())
             )
-                .andExpect(MockMvcResultMatchers.status().isBadRequest)
+                .andExpect(status().isBadRequest)
 
             verify(roleManagementService, never()).assignRole(any(), any(), any())
         }
@@ -296,12 +300,12 @@ class AdminUserControllerTest {
                 )
 
             mockMvc.perform(
-                MockMvcRequestBuilders.patch("/api/v1/admin/users/$userId/role")
+                patch("/api/v1/admin/users/$userId/role")
                     .contentType("application/json")
                     .content(objectMapper.writeValueAsString(roleUpdateRequest))
                     .with(adminJwt())
             )
-                .andExpect(MockMvcResultMatchers.status().isNoContent)
+                .andExpect(status().isNoContent)
 
             verify(roleManagementService).removeRole(userId, Role.PREMIUM, adminUserId)
         }
@@ -315,17 +319,21 @@ class AdminUserControllerTest {
             val user = testUser()
             val balance = testBalance()
 
-            whenever(userRepository.findAll(any<Pageable>())).thenReturn(
+            val pageableCaptor = argumentCaptor<Pageable>()
+            whenever(userRepository.findAll(pageableCaptor.capture())).thenReturn(
                 PageImpl(listOf(user), PageRequest.of(0, 20), 1)
             )
             whenever(userBalanceRepository.findByUserId(testUserId)).thenReturn(balance)
 
-            mockMvc.perform(MockMvcRequestBuilders.get("/api/v1/admin/users").with(adminJwt()))
-                .andExpect(MockMvcResultMatchers.status().isOk)
-                .andExpect(MockMvcResultMatchers.jsonPath("$.content.length()").value(1))
-                .andExpect(MockMvcResultMatchers.jsonPath("$.content[0].id").value(user.id.toString()))
-                .andExpect(MockMvcResultMatchers.jsonPath("$.content[0].email").value("test@example.com"))
-                .andExpect(MockMvcResultMatchers.jsonPath("$.content[0].balance").value(1000.00))
+            mockMvc.perform(get("/api/v1/admin/users").with(adminJwt()))
+                .andExpect(status().isOk)
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.content[0].id").value(user.id.toString()))
+                .andExpect(jsonPath("$.content[0].email").value("test@example.com"))
+                .andExpect(jsonPath("$.content[0].balance").value(1000.00))
+
+            assertThat(pageableCaptor.firstValue.pageNumber).isEqualTo(0)
+            assertThat(pageableCaptor.firstValue.pageSize).isEqualTo(20)
         }
 
         @Test
@@ -338,23 +346,23 @@ class AdminUserControllerTest {
             )
             whenever(userBalanceRepository.findByUserId(testUserId)).thenReturn(balance)
 
-            mockMvc.perform(MockMvcRequestBuilders.get("/api/v1/admin/users").param("email", "test").with(adminJwt()))
-                .andExpect(MockMvcResultMatchers.status().isOk)
-                .andExpect(MockMvcResultMatchers.jsonPath("$.content.length()").value(1))
+            mockMvc.perform(get("/api/v1/admin/users").param("email", "test").with(adminJwt()))
+                .andExpect(status().isOk)
+                .andExpect(jsonPath("$.content.length()").value(1))
 
             verify(userRepository).findByEmailContainingIgnoreCase(eq("test"), any())
         }
 
         @Test
         fun `GET users with size=200 returns 400`() {
-            mockMvc.perform(MockMvcRequestBuilders.get("/api/v1/admin/users").param("size", "200").with(adminJwt()))
-                .andExpect(MockMvcResultMatchers.status().isBadRequest)
+            mockMvc.perform(get("/api/v1/admin/users").param("size", "200").with(adminJwt()))
+                .andExpect(status().isBadRequest)
         }
 
         @Test
         fun `GET users without ADMIN role returns 403`() {
-            mockMvc.perform(MockMvcRequestBuilders.get("/api/v1/admin/users").with(playerJwt()))
-                .andExpect(MockMvcResultMatchers.status().isForbidden)
+            mockMvc.perform(get("/api/v1/admin/users").with(playerJwt()))
+                .andExpect(status().isForbidden)
         }
     }
 
@@ -369,21 +377,21 @@ class AdminUserControllerTest {
             whenever(userRepository.findById(testUserId)).thenReturn(Optional.of(user))
             whenever(userBalanceRepository.findByUserId(testUserId)).thenReturn(balance)
 
-            mockMvc.perform(MockMvcRequestBuilders.get("/api/v1/admin/users/$testUserId").with(adminJwt()))
-                .andExpect(MockMvcResultMatchers.status().isOk)
-                .andExpect(MockMvcResultMatchers.jsonPath("$.id").value(user.id.toString()))
-                .andExpect(MockMvcResultMatchers.jsonPath("$.keycloak_id").value(testKeycloakId))
-                .andExpect(MockMvcResultMatchers.jsonPath("$.balance").value(1000.00))
-                .andExpect(MockMvcResultMatchers.jsonPath("$.currency").value("RUB"))
+            mockMvc.perform(get("/api/v1/admin/users/$testUserId").with(adminJwt()))
+                .andExpect(status().isOk)
+                .andExpect(jsonPath("$.id").value(user.id.toString()))
+                .andExpect(jsonPath("$.keycloak_id").value(testKeycloakId))
+                .andExpect(jsonPath("$.balance").value(1000.00))
+                .andExpect(jsonPath("$.currency").value("RUB"))
         }
 
         @Test
         fun `GET user by id for nonexistent user returns 404`() {
             whenever(userRepository.findById(testUserId)).thenReturn(Optional.empty())
 
-            mockMvc.perform(MockMvcRequestBuilders.get("/api/v1/admin/users/$testUserId").with(adminJwt()))
-                .andExpect(MockMvcResultMatchers.status().isNotFound)
-                .andExpect(MockMvcResultMatchers.jsonPath("$.error").value("USER_NOT_FOUND"))
+            mockMvc.perform(get("/api/v1/admin/users/$testUserId").with(adminJwt()))
+                .andExpect(status().isNotFound)
+                .andExpect(jsonPath("$.error").value("USER_NOT_FOUND"))
         }
     }
 
@@ -399,11 +407,11 @@ class AdminUserControllerTest {
                 .thenReturn(PageImpl(listOf(transaction), PageRequest.of(0, 20), 1))
 
             mockMvc.perform(
-                MockMvcRequestBuilders.get("/api/v1/admin/users/$testUserId/balance/transactions").with(adminJwt())
+                get("/api/v1/admin/users/$testUserId/balance/transactions").with(adminJwt())
             )
-                .andExpect(MockMvcResultMatchers.status().isOk)
-                .andExpect(MockMvcResultMatchers.jsonPath("$.content[0].id").value(transaction.id.toString()))
-                .andExpect(MockMvcResultMatchers.jsonPath("$.content[0].type").value("DEPOSIT"))
+                .andExpect(status().isOk)
+                .andExpect(jsonPath("$.content[0].id").value(transaction.id.toString()))
+                .andExpect(jsonPath("$.content[0].type").value("DEPOSIT"))
         }
 
         @Test
@@ -411,10 +419,10 @@ class AdminUserControllerTest {
             whenever(userRepository.existsById(testUserId)).thenReturn(false)
 
             mockMvc.perform(
-                MockMvcRequestBuilders.get("/api/v1/admin/users/$testUserId/balance/transactions").with(adminJwt())
+                get("/api/v1/admin/users/$testUserId/balance/transactions").with(adminJwt())
             )
-                .andExpect(MockMvcResultMatchers.status().isNotFound)
-                .andExpect(MockMvcResultMatchers.jsonPath("$.error").value("USER_NOT_FOUND"))
+                .andExpect(status().isNotFound)
+                .andExpect(jsonPath("$.error").value("USER_NOT_FOUND"))
 
             verify(balanceTransactionRepository, never()).findByUserIdOrderByCreatedAtDesc(any<UUID>(), any<Pageable>())
         }
@@ -424,7 +432,7 @@ class AdminUserControllerTest {
     inner class AdjustBalanceTests {
 
         @Test
-        fun `POST adjust with amount=500, description="Compensation" returns 200 with BalanceOperationResponse`() {
+        fun `POST adjust with amount=500, description=Compensation for failed session returns 200 with BalanceOperationResponse`() {
             val userId = UUID.randomUUID()
             val request = BalanceAdjustRequest(
                 amount = BigDecimal("500.00"),
@@ -440,13 +448,14 @@ class AdminUserControllerTest {
             whenever(balanceService.applyOperation(eq(userId), any<BalanceOperationRequest>())).thenReturn(response)
 
             mockMvc.perform(
-                MockMvcRequestBuilders.post("/api/v1/admin/users/$userId/balance/adjust")
+                post("/api/v1/admin/users/$userId/balance/adjust")
+                    .header("X-Idempotency-Key", "test-idempotency-key-123")
                     .contentType("application/json")
                     .content(objectMapper.writeValueAsString(request))
                     .with(adminJwt())
             )
-                .andExpect(MockMvcResultMatchers.status().isOk)
-                .andExpect(MockMvcResultMatchers.jsonPath("$.new_balance").value(1500.00))
+                .andExpect(status().isOk)
+                .andExpect(jsonPath("$.new_balance").value(1500.00))
 
             verify(balanceService).applyOperation(eq(userId), any())
         }
@@ -468,12 +477,13 @@ class AdminUserControllerTest {
             whenever(balanceService.applyOperation(eq(userId), any<BalanceOperationRequest>())).thenReturn(response)
 
             mockMvc.perform(
-                MockMvcRequestBuilders.post("/api/v1/admin/users/$userId/balance/adjust")
+                post("/api/v1/admin/users/$userId/balance/adjust")
+                    .header("X-Idempotency-Key", "test-idempotency-key-123")
                     .contentType("application/json")
                     .content(objectMapper.writeValueAsString(request))
                     .with(adminJwt())
             )
-                .andExpect(MockMvcResultMatchers.status().isOk)
+                .andExpect(status().isOk)
 
             verify(balanceService).applyOperation(eq(userId), any())
         }
@@ -487,12 +497,13 @@ class AdminUserControllerTest {
             )
 
             mockMvc.perform(
-                MockMvcRequestBuilders.post("/api/v1/admin/users/$userId/balance/adjust")
+                post("/api/v1/admin/users/$userId/balance/adjust")
+                    .header("X-Idempotency-Key", "test-idempotency-key-123")
                     .contentType("application/json")
                     .content(objectMapper.writeValueAsString(request))
                     .with(adminJwt())
             )
-                .andExpect(MockMvcResultMatchers.status().isBadRequest)
+                .andExpect(status().isBadRequest)
         }
 
         @Test
@@ -504,12 +515,13 @@ class AdminUserControllerTest {
             )
 
             mockMvc.perform(
-                MockMvcRequestBuilders.post("/api/v1/admin/users/$userId/balance/adjust")
+                post("/api/v1/admin/users/$userId/balance/adjust")
+                    .header("X-Idempotency-Key", "test-idempotency-key-123")
                     .contentType("application/json")
                     .content(objectMapper.writeValueAsString(request))
                     .with(adminJwt())
             )
-                .andExpect(MockMvcResultMatchers.status().isBadRequest)
+                .andExpect(status().isBadRequest)
         }
 
         @Test
@@ -524,12 +536,13 @@ class AdminUserControllerTest {
             """.trimIndent()
 
             mockMvc.perform(
-                MockMvcRequestBuilders.post("/api/v1/admin/users/$userId/balance/adjust")
+                post("/api/v1/admin/users/$userId/balance/adjust")
+                    .header("X-Idempotency-Key", "test-idempotency-key-123")
                     .contentType("application/json")
                     .content(jsonPayload)
                     .with(adminJwt())
             )
-                .andExpect(MockMvcResultMatchers.status().isBadRequest)
+                .andExpect(status().isBadRequest)
         }
 
         @Test
@@ -544,13 +557,14 @@ class AdminUserControllerTest {
                 .doThrow(UserNotFoundException.byUserId(userId))
 
             mockMvc.perform(
-                MockMvcRequestBuilders.post("/api/v1/admin/users/$userId/balance/adjust")
+                post("/api/v1/admin/users/$userId/balance/adjust")
+                    .header("X-Idempotency-Key", "test-idempotency-key-123")
                     .contentType("application/json")
                     .content(objectMapper.writeValueAsString(request))
                     .with(adminJwt())
             )
-                .andExpect(MockMvcResultMatchers.status().isNotFound)
-                .andExpect(MockMvcResultMatchers.jsonPath("$.error").value("USER_NOT_FOUND"))
+                .andExpect(status().isNotFound)
+                .andExpect(jsonPath("$.error").value("USER_NOT_FOUND"))
         }
 
         @Test
@@ -570,16 +584,19 @@ class AdminUserControllerTest {
             val captor = argumentCaptor<BalanceOperationRequest>()
             whenever(balanceService.applyOperation(eq(userId), captor.capture())).thenReturn(response)
 
+            val expectedIdempotencyKey = "test-idempotency-key-123"
+
             mockMvc.perform(
-                MockMvcRequestBuilders.post("/api/v1/admin/users/$userId/balance/adjust")
+                post("/api/v1/admin/users/$userId/balance/adjust")
+                    .header("X-Idempotency-Key", expectedIdempotencyKey)
                     .contentType("application/json")
                     .content(objectMapper.writeValueAsString(request))
                     .with(adminJwt())
             )
-                .andExpect(MockMvcResultMatchers.status().isOk)
+                .andExpect(status().isOk)
 
-            Assertions.assertThat(captor.firstValue.idempotencyKey)
-                .startsWith("admin:$adminUserId:")
+            assertThat(captor.firstValue.idempotencyKey)
+                .isEqualTo(expectedIdempotencyKey)
         }
     }
 }

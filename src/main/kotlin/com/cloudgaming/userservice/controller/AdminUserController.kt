@@ -1,39 +1,43 @@
 package com.cloudgaming.userservice.controller
 
-import com.cloudgaming.userservice.service.RoleManagementService
-import com.cloudgaming.userservice.common.exception.UserNotFoundException
-import com.cloudgaming.userservice.constants.AdminConstants
-import com.cloudgaming.userservice.constants.Role
 import com.cloudgaming.userservice.common.exception.RoleNotFoundException
+import com.cloudgaming.userservice.common.exception.UserNotFoundException
+import com.cloudgaming.userservice.common.security.SecurityUtils
+import com.cloudgaming.userservice.constants.AdminConstants
+import com.cloudgaming.userservice.constants.HeaderNames
+import com.cloudgaming.userservice.constants.Role
+import com.cloudgaming.userservice.domain.TransactionType
 import com.cloudgaming.userservice.dto.BalanceOperationRequest
 import com.cloudgaming.userservice.dto.BalanceOperationResponse
 import com.cloudgaming.userservice.dto.TransactionDto
-import com.cloudgaming.userservice.domain.TransactionType
+import com.cloudgaming.userservice.dto.admin.AdminUserDto
+import com.cloudgaming.userservice.dto.admin.BalanceAdjustRequest
+import com.cloudgaming.userservice.dto.admin.RoleUpdateRequest
 import com.cloudgaming.userservice.persistence.BalanceTransactionRepository
 import com.cloudgaming.userservice.persistence.UserBalanceRepository
 import com.cloudgaming.userservice.persistence.UserRepository
 import com.cloudgaming.userservice.service.BalanceService
-import com.cloudgaming.userservice.common.security.SecurityUtils
-import com.cloudgaming.userservice.dto.admin.AdminUserDto
-import com.cloudgaming.userservice.dto.admin.BalanceAdjustRequest
-import com.cloudgaming.userservice.dto.admin.RoleUpdateRequest
+import com.cloudgaming.userservice.service.RoleManagementService
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.security.SecurityRequirement
 import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.validation.Valid
 import jakarta.validation.constraints.Max
+import jakarta.validation.constraints.Min
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.PageRequest
 import org.springframework.data.domain.Sort
 import org.springframework.http.ResponseEntity
 import org.springframework.security.access.prepost.PreAuthorize
+import org.springframework.validation.annotation.Validated
 import org.springframework.web.bind.annotation.*
 import java.math.BigDecimal
-import java.util.UUID
+import java.util.*
 
 @RestController
 @RequestMapping("/api/v1/admin/users")
 @PreAuthorize("hasRole('ADMIN')")
+@Validated
 @Tag(name = "Admin User Management", description = "Admin endpoints for user management")
 @SecurityRequirement(name = "bearerAuth")
 class AdminUserController(
@@ -68,10 +72,12 @@ class AdminUserController(
     @Operation(summary = "List users with pagination and email filter")
     fun listUsers(
         @RequestParam(defaultValue = "0") page: Int,
-        @RequestParam(defaultValue = "20") @Max(100) size: Int,
+        @RequestParam(defaultValue = "20") size: Int,
         @RequestParam(defaultValue = "") email: String,
         @RequestParam(defaultValue = AdminConstants.DEFAULT_SORT) sort: String
     ): ResponseEntity<Page<AdminUserDto>> {
+        require(page >= 0 && size in 1..100) { "Invalid pagination parameters: page must be >= 0 and size between 1 and 100" }
+
         val sortSpec = parseSort(sort)
         val pageable = PageRequest.of(page, size, sortSpec)
 
@@ -104,7 +110,6 @@ class AdminUserController(
     fun getUserById(@PathVariable id: UUID): ResponseEntity<AdminUserDto> {
         val user = userRepository.findById(id).orElseThrow { UserNotFoundException.byUserId(id) }
         val balance = userBalanceRepository.findByUserId(id)
-            ?: throw UserNotFoundException.byUserId(id)
 
         val dto = AdminUserDto(
             id = user.id,
@@ -112,8 +117,8 @@ class AdminUserController(
             email = user.email,
             displayName = user.displayName,
             avatarUrl = user.avatarUrl,
-            balance = balance.amount,
-            currency = balance.currency,
+            balance = balance?.amount ?: BigDecimal.ZERO,
+            currency = balance?.currency ?: AdminConstants.DEFAULT_CURRENCY,
             createdAt = user.createdAt,
             lastLoginAt = user.lastLoginAt
         )
@@ -129,6 +134,8 @@ class AdminUserController(
         @RequestParam(defaultValue = "20") size: Int,
         @RequestParam(defaultValue = AdminConstants.DEFAULT_SORT) sort: String
     ): ResponseEntity<Page<TransactionDto>> {
+        require(page >= 0 && size in 1..100) { "Invalid pagination parameters: page must be >= 0 and size between 1 and 100" }
+
         if (!userRepository.existsById(id)) {
             throw UserNotFoundException.byUserId(id)
         }
@@ -154,15 +161,14 @@ class AdminUserController(
     @Operation(summary = "Manual balance adjustment by admin")
     fun adjustBalance(
         @PathVariable id: UUID,
-        @RequestBody @Valid request: BalanceAdjustRequest
+        @RequestBody @Valid request: BalanceAdjustRequest,
+        @RequestHeader(HeaderNames.IDEMPOTENCY_KEY) idempotencyKey: String
     ): ResponseEntity<BalanceOperationResponse> {
         val adminId = securityUtils.getCurrentUserId()
 
-        val idempotencyKey = "${AdminConstants.IDEMPOTENCY_KEY_ADMIN_PREFIX}${adminId}:${System.currentTimeMillis()}"
-
         val operationRequest = BalanceOperationRequest(
             type = TransactionType.ADMIN_ADJUSTMENT,
-            amount = if (request.amount > BigDecimal.ZERO) request.amount else request.amount.abs(),
+            amount = request.amount,
             idempotencyKey = idempotencyKey,
             sessionId = null,
             paymentId = null,
